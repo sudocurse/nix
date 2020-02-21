@@ -143,13 +143,16 @@ static void prim_scopedImport(EvalState & state, const Pos & pos, Value * * args
             Env * env = &state.allocEnv(args[0]->attrs->size());
             env->up = &state.baseEnv;
 
-            StaticEnv staticEnv(false, &state.staticBaseEnv);
+            StaticEnv staticEnv(false, &state.staticBaseEnv, args[0]->attrs->size());
 
             unsigned int displ = 0;
             for (auto & attr : *args[0]->attrs) {
-                staticEnv.vars[attr.name] = displ;
+                staticEnv.vars.emplace_back(attr.name, displ);
                 env->values[displ++] = attr.value;
             }
+
+            // No need to call staticEnv.sort(), because
+            // args[0]->attrs is already sorted.
 
             printTalkative("evaluating file '%1%'", realPath);
             Expr * e = state.parseExprFromFile(resolveExprPath(realPath), staticEnv);
@@ -2404,6 +2407,8 @@ void EvalState::createBaseEnv()
     /* Now that we've added all primops, sort the `builtins' set,
        because attribute lookups expect it to be sorted. */
     baseEnv.values[0]->attrs->sort();
+
+    staticBaseEnv.sort();
 }
 
 
