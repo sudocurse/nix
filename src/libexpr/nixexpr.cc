@@ -258,7 +258,7 @@ void ExprVar::bindVars(const StaticEnv & env)
     /* Check whether the variable appears in the environment.  If so,
        set its level and displacement. */
     const StaticEnv * curEnv;
-    unsigned int level;
+    Level level;
     int withLevel = -1;
     for (curEnv = &env, level = 0; curEnv; curEnv = curEnv->up, level++) {
         if (curEnv->isWith) {
@@ -311,7 +311,7 @@ void ExprAttrs::bindVars(const StaticEnv & env)
     if (recursive) {
         dynamicEnv = &newEnv;
 
-        unsigned int displ = 0;
+        Displacement displ = 0;
         for (auto & i : attrs)
             newEnv.vars.emplace_back(i.first, i.second.displ = displ++);
 
@@ -344,7 +344,7 @@ void ExprLambda::bindVars(const StaticEnv & env)
         (matchAttrs ? formals->formals.size() : 0) +
         (arg.empty() ? 0 : 1));
 
-    unsigned int displ = 0;
+    Displacement displ = 0;
 
     if (!arg.empty()) newEnv.vars.emplace_back(arg, displ++);
 
@@ -372,7 +372,7 @@ void ExprLet::bindVars(const StaticEnv & env)
 {
     StaticEnv newEnv(false, &env, attrs->attrs.size());
 
-    unsigned int displ = 0;
+    Displacement displ = 0;
     for (auto & i : attrs->attrs)
         newEnv.vars.emplace_back(i.first, i.second.displ = displ++);
 
@@ -390,7 +390,7 @@ void ExprWith::bindVars(const StaticEnv & env)
        level so that `lookupVar' can look up variables in the previous
        `with' if this one doesn't contain the desired attribute. */
     const StaticEnv * curEnv;
-    unsigned int level;
+    Level level;
     prevWith = 0;
     for (curEnv = &env, level = 1; curEnv; curEnv = curEnv->up, level++)
         if (curEnv->isWith) {
