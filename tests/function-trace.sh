@@ -70,8 +70,6 @@ function-trace entered undefined position at
 function-trace exited undefined position at
 function-trace entered (string):1:1 at
 function-trace exited (string):1:1 at
-function-trace entered (string):1:1 at
-function-trace exited (string):1:1 at
 "
 
 # Not a function
