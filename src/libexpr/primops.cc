@@ -2378,10 +2378,10 @@ void EvalState::createBaseEnv()
 
     /* Add a wrapper around the derivation primop that computes the
        `drvPath' and `outPath' attributes lazily. */
-    string path = canonPath(settings.nixDataDir + "/nix/corepkgs/derivation.nix", true);
-    sDerivationNix = symbols.create(path);
-    evalFile(path, v);
-    addConstant("derivation", v);
+    auto derivationPath = canonPath(settings.nixDataDir + "/nix/corepkgs/derivation.nix", true);
+    sDerivationNix = symbols.create(derivationPath);
+    auto vDerivation = allocValue();
+    addConstant("derivation", vDerivation);
 
     /* Add a value containing the current Nix expression search path. */
     mkList(v, searchPath.size());
@@ -2405,6 +2405,10 @@ void EvalState::createBaseEnv()
     baseEnv.values[0]->attrs->sort();
 
     staticBaseEnv.sort();
+
+    /* Note: we have to initialize the 'derivation' constant *after*
+       building baseEnv/staticBaseEnv because it uses 'builtins'. */
+    evalFile(derivationPath, *vDerivation);
 }
 
 
