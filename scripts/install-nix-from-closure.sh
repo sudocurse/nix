@@ -109,8 +109,13 @@ if [ "$(uname -s)" = "Darwin" ]; then
         "$self/create-darwin-volume.sh"
     fi
 
-    info=$(diskutil info -plist / | xpath "/plist/dict/key[text()='Writable']/following-sibling::true[1]" 2> /dev/null)
-    if ! [ -e $dest ] && [ -n "$info" ] && { [ "$macos_major" -gt 10 ] || { [ "$macos_major" -eq 10 ] && [ "$macos_minor" -gt 14 ]; }; }; then
+    writable="$(diskutil info -plist / | xmllint --xpath "/plist/dict/key[text()='Writable']/following-sibling::*[1]/text()" -)"
+    # TODO: I wonder a bit if we need the version test, here. This may seem odd since I
+    # committed the existing version test, but I think someone asked me to? I was very
+    # reluctant to touch this file. Anyways; I've fixed two probable bugs here and want
+    # to validate the existing behavior before taking it a step further and nuking the
+    # version tests.
+    if ! [ -e $dest ] && [ "$writable" = "false" ] && { [ "$macos_major" -gt 10 ] || { [ "$macos_major" -eq 10 ] && [ "$macos_minor" -gt 14 ]; }; }; then
         (
             echo ""
             echo "Installing on macOS >=10.15 requires relocating the store to an apfs volume."
