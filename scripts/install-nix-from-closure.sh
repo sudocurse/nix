@@ -109,7 +109,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
         "$self/create-darwin-volume.sh"
     fi
 
-    writable="$(diskutil info -plist / | xmllint --xpath "/plist/dict/key[text()='Writable']/following-sibling::*[1]/text()" -)"
+    writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
     # TODO: I wonder a bit if we need the version test, here. This may seem odd since I
     # committed the existing version test, but I think someone asked me to? I was very
     # reluctant to touch this file. Anyways; I've fixed two probable bugs here and want
