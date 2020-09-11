@@ -625,7 +625,16 @@ configure_shell_profile() {
         if [ -e "$profile_target" ]; then
             _sudo "to back up your current $profile_target to $profile_target$PROFILE_BACKUP_SUFFIX" \
                   cp "$profile_target" "$profile_target$PROFILE_BACKUP_SUFFIX"
+        else
+            # try to create the file if its directory exists
+            target_dir="$(dirname "$profile_target")"
+            if [ -d "$target_dir" ]; then
+                _sudo "to create a stub $profile_target which will be updated" \
+                    touch "$profile_target"
+            fi
+        fi
 
+        if [ -e "$profile_target" ]; then
             shell_source_lines \
                 | _sudo "extend your $profile_target with nix-daemon settings" \
                         tee -a "$profile_target"
