@@ -34,8 +34,10 @@ create_synthetic_objects(){
     # This feels a little dirty, but as far as I can tell the
     # simplest way to get the right one is to just throw away stderr
     # and call both... :]
-    /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t || true 2>/dev/null # Big Sur
-    /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -B || true 2>/dev/null # Catalina
+    {
+        /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t || true # Big Sur
+        /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -B || true # Catalina
+    } >/dev/null 2>&1
 }
 
 test_nix() {
