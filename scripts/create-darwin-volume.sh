@@ -11,7 +11,7 @@ root_disk_identifier() {
 }
 
 find_nix_volume() {
-    diskutil apfs list -plist "$1" | xmllint --xpath "/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[contains(translate(text(),'N','n'),'nix')]/text()" -
+    diskutil apfs list -plist "$1" | xmllint --xpath "/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[contains(translate(text(),'N','n'),'nix')]/text()" - || true 2>/dev/null
 }
 
 test_fstab() {
