@@ -74,7 +74,7 @@ test_t2_chip_present(){
 }
 
 test_filevault_in_use() {
-    fdesetup isactive
+    fdesetup isactive >/dev/null
 }
 
 # use after error msg for conditions we don't understand
