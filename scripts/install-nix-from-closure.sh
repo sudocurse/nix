@@ -24,9 +24,9 @@ fi
 
 # macOS support for 10.12.6 or higher
 if [ "$(uname -s)" = "Darwin" ]; then
-    verinfo="$(mktemp)"
-    sw_vers -productVersion > "$verinfo"
-    IFS='.' read macos_major macos_minor macos_patch < "$verinfo"
+    IFS='.' read macos_major macos_minor macos_patch << EOF
+$(sw_vers -productVersion)
+EOF
     if [ "$macos_major" -lt 10 ] || { [ "$macos_major" -eq 10 ] && [ "$macos_minor" -lt 12 ]; } || { [ "$macos_minor" -eq 12 ] && [ "$macos_patch" -lt 6 ]; }; then
         echo "$0: macOS $macos_major.$macos_minor.$macos_patch is not supported, upgrade to 10.12.6 or higher"
         exit 1
