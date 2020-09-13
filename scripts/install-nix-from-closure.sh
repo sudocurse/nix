@@ -115,7 +115,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
     # reluctant to touch this file. Anyways; I've fixed two probable bugs here and want
     # to validate the existing behavior before taking it a step further and nuking the
     # version tests.
-    if ! [ -e $dest ] && [ "$writable" = "false" ]; }; }; then
+    if ! [ -e $dest ] && [ "$writable" = "false" ]; then
         (
             echo ""
             echo "Installing on macOS >=10.15 requires relocating the store to an apfs volume."
