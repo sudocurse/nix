@@ -60,16 +60,16 @@ while [ $# -gt 0 ]; do
         --no-modify-profile)
             NIX_INSTALLER_NO_MODIFY_PROFILE=1;;
         --darwin-use-unencrypted-nix-store-volume)
-            (
+            {
                 echo "Warning: the flag --darwin-use-unencrypted-nix-store-volume"
                 echo "         is no longer needed and will be removed in the future."
                 echo ""
-            ) >&2;;
+            } >&2;;
         --nix-extra-conf-file)
             export NIX_EXTRA_CONF="$(cat $2)"
             shift;;
         *)
-            (
+            {
                 echo "Nix Installer [--daemon|--no-daemon] [--daemon-user-count INT] [--no-channel-add] [--no-modify-profile] [--nix-extra-conf-file FILE]"
 
                 echo "Choose installation method."
@@ -96,7 +96,7 @@ while [ $# -gt 0 ]; do
                 if [ -n "${INVOKED_FROM_INSTALL_IN:-}" ]; then
                     echo " --tarball-url-prefix URL: Base URL to download the Nix tarball from."
                 fi
-            ) >&2
+            } >&2
 
             exit;;
     esac
