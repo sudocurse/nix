@@ -13,7 +13,7 @@ readonly NIX_VOLUME_CREATE=${NIX_VOLUME_CREATE:-1} # now default
 # 1. take advantage of the UI/X affordances here
 # 2. retain some degree of invokability (a kindness to anyone who has a script
 #    set up to download and run it)?
-. "$EXTRACTED_NIX_PATH/create-darwin-volume.sh" "no-exec"
+. "$EXTRACTED_NIX_PATH/create-darwin-volume.sh" "no-main"
 
 dsclattr() {
     /usr/bin/dscl . -read "$1" \
