@@ -50,7 +50,7 @@ case "$(uname -s)" in
     *)
         INSTALL_MODE=no-daemon;;
 esac
-
+# CREATE_DARWIN_VOLUME=${CREATE_DARWIN_VOLUME:-1} # now default
 # handle the command line flags
 while [ $# -gt 0 ]; do
     case $1 in
@@ -108,7 +108,7 @@ while [ $# -gt 0 ]; do
             exit;;
     esac
     shift
-
+done
 
 if [ "$INSTALL_MODE" = "daemon" ]; then
     printf '\e[1;31mSwitching to the Multi-user Installer\e[0m\n'
