@@ -41,7 +41,7 @@ readonly NIX_INSTALLED_CACERT="@cacert@"
 #readonly NIX_INSTALLED_CACERT="/nix/store/7dxhzymvy330i28ii676fl1pqwcahv2f-nss-cacert-3.49.2"
 readonly EXTRACTED_NIX_PATH="$(dirname "$0")"
 
-readonly ROOT_HOME=$(echo ~root)
+readonly ROOT_HOME=$(echo ~root) # TODO: VAR=~root works; no substitution needed
 
 if [ -t 0 ]; then
     readonly IS_HEADLESS='no'
@@ -225,7 +225,7 @@ _sudo() {
 }
 
 
-readonly SCRATCH=$(mktemp -d -t tmp.XXXXXXXXXX)
+readonly SCRATCH=$(mktemp -d "${TMPDIR:-/tmp/}tmp.XXXXXXXXXX")
 function finish_cleanup {
     rm -rf "$SCRATCH"
 }
@@ -264,6 +264,23 @@ $(poly_extra_try_me_commands)
 $(poly_extra_setup_instructions)
 Thank you for using this installer. If you have any feedback, don't
 hesitate:
+
+$(contactme)
+EOF
+
+}
+
+function finish_uninstall_success {
+    finish_cleanup
+
+    ok "Alright! Nix should be removed!"
+    cat <<EOF
+
+$(poly_extra_uninstall_instructions)
+
+Thanks for using Nix--we hope you'll install again soon. Let us know
+if you notice anything the uninstaller didn't clean up. If you spot
+anything or have any feedback, don't hesitate:
 
 $(contactme)
 EOF
@@ -473,7 +490,7 @@ This installation tool will set up your computer with the Nix package
 manager. This will happen in a few stages:
 
 1. Make sure your computer doesn't already have Nix. If it does, I
-   will show you instructions on how to clean up your old one.
+   will show you instructions on how to clean up your old install.
 
 2. Show you what we are going to install and where. Then we will ask
    if you are ready to continue.
@@ -706,5 +723,41 @@ main() {
     trap finish_success EXIT
 }
 
+uninstall() {
+    # TODO: de-duplicate if the install/uninstall logic stays together
+    if [ "$(uname -s)" = "Darwin" ]; then
+        # shellcheck source=./install-darwin-multi-user.sh
+        . "$EXTRACTED_NIX_PATH/install-darwin-multi-user.sh"
+    elif [ "$(uname -s)" = "Linux" ]; then
+        # shellcheck source=./install-systemd-multi-user.sh
+        . "$EXTRACTED_NIX_PATH/install-systemd-multi-user.sh" # most of this works on non-systemd distros also
+    else
+        failure "Sorry, I don't know what to do on $(uname)"
+    fi
 
-main
+    # uninstall report
+    if ! ui_confirm "Ready to continue?"; then
+        ok "Alright, no changes have been made :)"
+        contactme
+        trap finish_cleanup EXIT
+        exit 1
+    fi
+    
+    poly_service_uninstall_prompts
+
+    trap finish_uninstall_success EXIT
+}
+
+# ACTION for override
+case "${1-}" in
+    uninstall)
+        shift
+        uninstall "$@";;
+    install)
+        # same as the no-arg condition for now (but, explicit)
+        shift
+        main "$@";;
+    *)
+        shift
+        main "$@";;
+esac

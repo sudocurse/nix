@@ -30,9 +30,10 @@ poly_validate_assumptions() {
     fi
     writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
 
-    if ! [ -e $NIX_ROOT ] && [ "$writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
-        # we need to create a Nix volume
-        darwin_volume_validate_assumptions
+    if [ "$writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
+        # we need to create a Nix volume (if it doesn't exist)
+        darwin_volume_uninstall_prompts
+        # darwin_volume_validate_assumptions
     fi
 }
 
@@ -49,7 +50,7 @@ poly_service_uninstall_directions() {
 }
 
 poly_service_uninstall_prompts() {
-    echo "$1. Remove macOS-specific components:"
+    # echo "$1. Remove macOS-specific components:"
     darwin_volume_uninstall_prompts
     if test_nix_daemon_installed; then
         nix_daemon_uninstall_prompt
@@ -57,6 +58,7 @@ poly_service_uninstall_prompts() {
 }
 
 poly_service_setup_note() {
+    # TODO: add create volume (but like, conditionally)
     cat <<EOF
  - load and start a LaunchDaemon (at $NIX_DAEMON_DEST) for nix-daemon
 
@@ -64,10 +66,16 @@ EOF
 }
 
 poly_extra_try_me_commands(){
-  :
+    :
 }
 poly_extra_setup_instructions(){
-  :
+    :
+}
+
+poly_extra_uninstall_instructions(){
+    cat <<EOF
+Your system should clean up the empty /nix mount-point directory on reboot.
+EOF
 }
 
 poly_configure_nix_daemon_service() {
