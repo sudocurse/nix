@@ -17,6 +17,14 @@ else
         shift # throw away the 'explanation'
         /usr/bin/sudo "$@"
     }
+    failure() {
+        if [ "$*" = "" ]; then
+            cat
+        else
+            echo "$@"
+        fi
+        exit 1
+    }
 fi
 
 # make it easy to play w/ 'Case-sensitive APFS'
@@ -41,25 +49,25 @@ substep(){
     printf "   %s\n" "" "- $1" "" ${@:2}
 }
 
-# TODO: document or variable-ify these
-printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC"
+printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC" # "dim"
+# bold+invert+red and bold+invert+green just for the +/- below
+# red/green foreground for rest of the line
 printf -v _OLD_LINE_FMT "%b" $'\033[1;7;31m-'"$ESC ${RED}%L${ESC}"
-printf -v _NEW_LINE_FMT "%b" $'\033[4;32m+'"$ESC ${GREEN}%L${ESC}"
+printf -v _NEW_LINE_FMT "%b" $'\033[1;7;32m+'"$ESC ${GREEN}%L${ESC}"
 _diff() {
     # shellcheck disable=SC2068
     /usr/bin/diff --unchanged-group-format="$_UNCHANGED_GRP_FMT" --old-line-format="$_OLD_LINE_FMT" --new-line-format="$_NEW_LINE_FMT" --unchanged-line-format="  %L" $@
 }
 
 confirm_rm() {
-    if ui_confirm "Can we remove $1?"; then
+    if ui_confirm "Can I remove $1?"; then
         # ok "Yay! Thanks! Let's get going!"
         _sudo "to remove $1" rm "$1"
     fi
 }
 confirm_edit() {
-    echo "We might be able to help you make this edit. Here's the diff:"
-    # TODO: technically we could also test the diff
-    # (to ensure it differs) but it should...
+    echo "I might be able to help you make this edit. Here's the diff:"
+    # could technically test the diff, but caller should do it
     _diff "$1" "$2"
     if ui_confirm "Does the change above look right?"; then
         # ok "Yay! Thanks! Let's get going!"
@@ -85,22 +93,21 @@ test_fstab() {
     /usr/bin/grep -q "$NIX_ROOT apfs rw" /etc/fstab 2>/dev/null
 }
 
-# TODO: none of these 3 funcs are configurable
 test_nix_symlink() {
-    [ -L "/nix" ] || /usr/bin/grep -q "^nix." /etc/synthetic.conf 2>/dev/null
+    [ -L "$NIX_ROOT" ] || /usr/bin/grep -q "^nix." /etc/synthetic.conf 2>/dev/null
 }
 test_synthetic_conf_mountable() {
-    /usr/bin/grep -q "^nix$" /etc/synthetic.conf 2>/dev/null
+    /usr/bin/grep -q "^${NIX_ROOT:1}$" /etc/synthetic.conf 2>/dev/null
 }
 test_synthetic_conf_symlinked() {
-    /usr/bin/grep -qE "^nix\s+\S{3,}" /etc/synthetic.conf 2>/dev/null
+    /usr/bin/grep -qE "^${NIX_ROOT:1}\s+\S{3,}" /etc/synthetic.conf 2>/dev/null
 }
 
 test_nix_volume_mountd_installed() {
     test -e "$NIX_VOLUME_MOUNTD_DEST"
 }
 
-# if there's no UUID match, true here is a cruft smell
+# true here is a cruft smell when ! test_keychain_by_uuid
 test_keychain_by_label() {
     # Note: doesn't need sudo just to check; doesn't output pw
     security find-generic-password -a "$NIX_VOLUME_LABEL" &>/dev/null
@@ -137,16 +144,10 @@ test_filevault_in_use() {
     /usr/bin/fdesetup isactive >/dev/null
 }
 
-# use after error msg for conditions we don't understand
-suggest_report_error(){
-    # ex "error: something sad happened :(" >&2
-    echo "       please report this @ https://github.com/nixos/nix/issues" >&2
-}
-
 generate_mount_command(){
     # TODO: lilyball: If a volume exists starting with "Nix" already, we use that volume. This mount command needs to be parameterized accordingly ... for that matter we should probably embed the service too (pass the -s "$UUID" flag), so that way if I delete the volume and clean up everything except for my keychain password, when it creates a brand new password this won't accidentally read the old one.
-    if test_filevault_in_use; then
-        printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -a '$NIX_VOLUME_LABEL' -w | /usr/sbin/diskutil apfs unlockVolume '$NIX_VOLUME_LABEL' -mountpoint $NIX_ROOT -stdinpassphrase"
+    if [ "${1-}" = "" ]; then
+        printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -s '$1' -w | /usr/sbin/diskutil apfs unlockVolume '$NIX_VOLUME_LABEL' -mountpoint $NIX_ROOT -stdinpassphrase"
     else
         printf "    <string>%s</string>\n" /usr/sbin/diskutil mount -mountPoint "$NIX_ROOT" "$NIX_VOLUME_LABEL"
     fi
@@ -165,20 +166,39 @@ generate_mount_daemon(){
   <string>org.nixos.darwin-store</string>
   <key>ProgramArguments</key>
   <array>
-$(generate_mount_command)
+$(generate_mount_command "$1")
   </array>
 </dict>
 </plist>
 EOF
 }
 
+# TODO: this is a succinct example of a common pattern question I have
+# there are probably exceptions that break it, but I'd like to de-dup
+# the "direction" and "prompt" cases here. A single form that expresses
+# the goal and command/explanation...
+# uninstall_launch_daemon_abstract() {
+#     goal "uninstall LaunchDaemon $1"
+#     to "terminate the daemon" \
+#         run sudo launchctl bootout "system/$1"
+#     to "remove the daemon definition" \
+#         run sudo rm "$2"
+# }
+#
+# One way to make something like this work would be passing in ~closures
+# uninstall_launch_daemon_abstract "substep" "print_action"
+# uninstall_launch_daemon_abstract "ui_confirm" "run_action"
+#
+# But in some cases the approach a human and our script need to take diverge
+# by enough to challenge this paradigm, as in
+# synthetic_conf_uninstall_directions|prompt
 uninstall_launch_daemon_directions() {
     substep "Uninstall LaunchDaemon $1" \
       "  sudo launchctl bootout system/$1" \
       "  sudo rm $2"
 }
 uninstall_launch_daemon_prompt() {
-    if ui_confirm "Can we uninstall the LaunchDaemon $2?"; then
+    if ui_confirm "Can I uninstall the LaunchDaemon $1?"; then
         _sudo "to terminate the daemon" launchctl bootout "system/$1"
         _sudo "to remove the daemon definition" rm "$2"
     fi
@@ -200,8 +220,8 @@ synthetic_conf_uninstall_directions() {
     # :1 to strip leading slash
     # shellcheck disable=SC2086
     substep "Remove ${NIX_ROOT:1} from /etc/synthetic.conf" \
-      "  If nix is the only entry: sudo rm /etc/synthetic.conf" \
-      "  Otherwise: grep -v "^${NIX_ROOT:1}$" /etc/synthetic.conf | sudo dd of=/etc/synthetic.conf"
+        "  If nix is the only entry: sudo rm /etc/synthetic.conf" \
+        "  Otherwise: grep -v "^${NIX_ROOT:1}$" /etc/synthetic.conf | sudo dd of=/etc/synthetic.conf"
 }
 
 # TODO: this prompted for removal, but context was poor
@@ -229,21 +249,9 @@ synthetic_conf_uninstall_prompt() {
     fi
     # fallback instructions
     echo "Manually remove nix from /etc/synthetic.conf"
+    return 1
 }
-fstab_uninstall_directions() {
-    substep "Remove ${NIX_ROOT} from /etc/fstab" \
-      "  If nix is the only entry: sudo rm /etc/fstab" \
-      "  Otherwise, run 'sudo vifs' to remove the nix line"
-}
-# oh_hush() {
-#     our_ed="$(mktemp)"
-#     chmod 700 "$our_ed"
-#     cat >"$our_ed" <<EOF
-# #!/bin/sh
-# cat "$1" - >/etc/fstab
-# rm "$our_ed"
-# EOF
-# }
+
 add_nix_vol_fstab_line() {
     # shellcheck disable=SC2068
     EDITOR="ex" _sudo "to add nix to fstab" "$@" <<EOF
@@ -252,44 +260,8 @@ LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw,noauto,nobrowse
 .
 :x
 EOF
-#     <<EOF
-# 0a1,5
-# > #
-# > # Warning - this file should only be modified with vifs(8)
-# > #
-# > # Failure to do so is unsupported and may be destructive.
-# > #
-# 6c6
-# < 
-# ---
-# > LABEL=${NIX_VOLUME_FOR_FSTAB} $NIX_ROOT apfs rw,noauto,nobrowse
-# EOF
-#     <<EOF
-# \$a
-# LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw,noauto,nobrowse
-# .
-# w
-# q
-# EOF
 }
-# patch blah <<EOF
-# 0a1,5
-# > #
-# > # Warning - this file should only be modified with vifs(8)
-# > #
-# > # Failure to do so is unsupported and may be destructive.
-# > #
-# 6c6
-# <
-# ---
-# > LABEL=${NIX_VOLUME_FOR_FSTAB} $NIX_ROOT apfs rw,nobrowse
-# EOF
-# patch --dry-run --verbose blah <<EOF
-# 1c1
-# < LABEL=${NIX_VOLUME_FOR_FSTAB} $NIX_ROOT apfs rw,nobrowse
-# ---
-# >
-# EOF
+
 delete_nix_vol_fstab_line() {
     # TODO: I'm scaffolding this to handle the new nix volumes
     # but it might be nice to generalize a smidge further to
@@ -298,33 +270,29 @@ delete_nix_vol_fstab_line() {
     # shellcheck disable=SC2068
     EDITOR="patch" _sudo "to cut nix from fstab" "$@" < <(diff /etc/fstab <(grep -v "LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw" /etc/fstab))
     # left ",noauto,nobrowse" out of the grep; people might fiddle this a little
-#     <<EOF
-# 1c1
-# < LABEL=${NIX_VOLUME_FOR_FSTAB} $NIX_ROOT apfs rw,noauto,nobrowse
-# ---
-# >
-# EOF
-#     <<EOF
-# /LABEL=${NIX_VOLUME_FOR_FSTAB}[[:space:]]\{1,\}${NIX_ROOT/\//\\/}[[:space:]]\{1,\}apfs[[:space:]]\{1,\}rw,noauto,nobrowse/
-# .d
-# w
-# q
-# EOF
+}
+fstab_uninstall_directions() {
+    substep "Remove ${NIX_ROOT} from /etc/fstab" \
+      "  If nix is the only entry: sudo rm /etc/fstab" \
+      "  Otherwise, run 'sudo vifs' to remove the nix line"
 }
 fstab_uninstall_prompt() {
     cp /etc/fstab "$SCRATCH/fstab.edit"
-    delete_nix_vol_fstab_line patch "$SCRATCH/fstab.edit"
+    # technically doesn't need the _sudo path, but throwing away the
+    # output is probably better than mostly-duplicating the code...
+    delete_nix_vol_fstab_line patch "$SCRATCH/fstab.edit" &>/dev/null
 
-    if cmp <<<"" <(grep -v "^#" "$SCRATCH/fstab.edit") &>/dev/null; then
+    # if the patch test test, minus comment lines, is equal to empty (:)
+    if diff -q <(:) <(grep -v "^#" "$SCRATCH/fstab.edit") &>/dev/null; then
         # this edit would leave it empty; propose deleting it
         if confirm_rm "/etc/fstab"; then
             return 0
         else
-            # fallback instructions
+            # TODO: fallback instructions
             echo "Manually remove nix from /etc/fstab"
         fi
     else
-        echo "We might be able to help you make this edit. Here's the diff:"
+        echo "I might be able to help you make this edit. Here's the diff:"
         if ! _diff "/etc/fstab" "$SCRATCH/fstab.edit" && ui_confirm "Does the change above look right?"; then
             delete_nix_vol_fstab_line vifs
         else
@@ -332,12 +300,6 @@ fstab_uninstall_prompt() {
             echo "Manually remove nix from /etc/fstab"
         fi
     fi
-#     EDITOR=ed sudo vifs &>/dev/null <<EOF
-# /LABEL=${NIX_VOLUME/ /'\\\'040}[[:space:]]\{1,\}${NIX_ROOT/\//\\/}[[:space:]]\{1,\}apfs[[:space:]]\{1,\}rw,noauto,nobrowse/
-# .d
-# w
-# q
-# EOF
 }
 volume_uninstall_directions() {
     if test_keychain_by_uuid; then
@@ -368,7 +330,9 @@ darwin_volume_uninstall_directions() {
 }
 darwin_volume_uninstall_prompts() {
     if test_synthetic_conf_mountable; then
-        synthetic_conf_uninstall_prompt
+        if synthetic_conf_uninstall_prompt; then
+            reminder "macOS will clean up the empty mount-point directory at $NIX_ROOT on reboot."
+        fi
     fi
     if test_fstab; then
         fstab_uninstall_prompt
@@ -389,17 +353,18 @@ darwin_volume_uninstall_prompts() {
 # case is handled in volume_uninstall_prompt.
 keychain_label_uninstall_prompt() {
     cat <<EOF
-It looks like your keychain as one or more orphaned volume passwords.
-We can delete them if you like, or you can clean them up later.
+It looks like your keychain has at least 1 orphaned volume password.
+I can help delete these if you like, or you can clean them up later.
 EOF
     if ui_confirm "Do you want to review them now?"; then
         cat <<EOF
-We'll review each one individually by displaying the raw keychain
-entry. Don't worry--it doesn't show the actual password.
+
+I'll show one raw keychain entries (without the password) at a time.
+
 EOF
         while test_keychain_by_label; do
             security find-generic-password -a "$NIX_VOLUME_LABEL"
-            if ui_confirm "Can we delete this entry?"; then
+            if ui_confirm "Can I delete this entry?"; then
                 _sudo "to remove an old volume password from keychain" \
                 security delete-generic-password -a "$NIX_VOLUME_LABEL"
             fi
@@ -414,12 +379,12 @@ volume_uninstall_prompt() {
         and_keychain=" (and its encryption key)"
     fi
     cat <<EOF
-We can delete the Nix volume if you're certain you don't need it.
+I can delete the Nix volume if you're certain you don't need it.
 
 Here are the details of the Nix volume:
 $(diskutil info "$NIX_VOLUME_LABEL")
 EOF
-    if ui_confirm "Can we delete this volume$and_keychain?"; then
+    if ui_confirm "Can I delete this volume$and_keychain?"; then
         if [ -n "$and_keychain" ]; then
             _sudo "to remove the volume password from keychain" \
                 security delete-generic-password -s "$(volume_uuid "$NIX_VOLUME_LABEL")"
@@ -430,7 +395,6 @@ EOF
         _sudo "to delete the Nix volume" \
             diskutil apfs deleteVolume "$diskID"
     else
-        # TODO: no clue if it should behave this way.
         if [ -n "$and_keychain" ]; then
             keychain_uuid_uninstall_directions
         fi
@@ -446,6 +410,10 @@ keychain_label_uninstall_directions() {
       "  sudo security delete-generic-password -a '$NIX_VOLUME_LABEL'"
 }
 
+# TODO:
+# - some of these are obsoleted by better uninstall directions elsewhere
+# - if the "curing" approach wins out, several of these can be cut, or only
+#   be errors if curing fails, or... something?
 darwin_volume_validate_assumptions() {
     if test -e "$NIX_ROOT"; then
         if test_nix_symlink; then
@@ -458,7 +426,7 @@ EOF
             else
                 failure <<EOF
 $NIX_ROOT is a symlink (to $(readlink "$NIX_ROOT")) for some reason.
-You'll have to remove this symlink before we can create the Nix volume.
+You'll have to remove this symlink before I can create the Nix volume.
 EOF
             fi
         elif test_synthetic_conf_symlinked; then
@@ -521,20 +489,19 @@ setup_synthetic_conf() {
         echo "Configuring /etc/synthetic.conf..." >&2
         # TODO: technically /etc/synthetic.d/nix is supported in Big Sur+
         # but handling both takes even more code...
-
-        echo "${NIX_ROOT:1}" | _sudo "to add Nix to /etc/synthetic.conf" \
-            /usr/bin/tee -a /etc/synthetic.conf
+        _sudo "to add Nix to /etc/synthetic.conf" \
+            ex /etc/synthetic.conf <<EOF
+:a
+${NIX_ROOT:1} apfs rw,noauto,nobrowse
+.
+:x
+EOF
         if ! test_synthetic_conf_mountable; then
-            # TODO failure? figure out how to reconcile two modes here...
-            echo "error: failed to configure synthetic.conf;" >&2
-            suggest_report_error
-            exit 1
+            failure "error: failed to configure synthetic.conf" >&2
         fi
         create_synthetic_objects
         if ! test_nix; then
-            echo "error: failed to bootstrap /nix; if a reboot doesn't help," >&2
-            suggest_report_error
-            exit 1
+            failure "error: failed to bootstrap $NIX_ROOT" >&2
         fi
     fi
 }
@@ -560,7 +527,6 @@ setup_volume() {
     echo "Creating a Nix volume..." >&2
     _sudo "to create the Nix volume" \
         /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -mountpoint "$NIX_ROOT"
-    new_uuid="$(volume_uuid "$NIX_VOLUME_LABEL")"
 
     # if [ "$INSTALL_MODE" = "no-daemon" ]; then # exported by caller
     #     # TODO:
@@ -588,6 +554,7 @@ setup_volume() {
     # rather than failing over into subtle race-condition problems.
 
     if test_filevault_in_use; then
+        new_uuid="$(volume_uuid "$NIX_VOLUME_LABEL")"
         password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
         _sudo "to add your Nix volume's password to Keychain" \
         /usr/bin/security -i <<EOF
@@ -595,17 +562,16 @@ add-generic-password -a "$NIX_VOLUME_LABEL" -s "$new_uuid" -l "$NIX_VOLUME_LABEL
 EOF
         builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
             /usr/sbin/diskutil apfs encryptVolume "$NIX_VOLUME_LABEL" -user disk -stdinpassphrase
+        setup_volume_daemon "$new_uuid"
+    else
+        setup_volume_daemon "" # using UUID to discriminate FDE
     fi
 }
 
 setup_volume_daemon() {
     if ! test_voldaemon; then
         echo "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'..." >&2
-        # generate_mount_daemon > "$SCRATCH/mount_daemon"
-
-        # _sudo "to install the Nix volume mounter" \
-        #     cp "$SCRATCH/mount_daemon" "$NIX_VOLUME_MOUNTD_DEST"
-        generate_mount_daemon | _sudo "to install the Nix volume mounter" \
+        generate_mount_daemon "$1" | _sudo "to install the Nix volume mounter" \
             dd of="$NIX_VOLUME_MOUNTD_DEST" 2>/dev/null
 
         _sudo "to launch the Nix volume mounter" \
@@ -617,7 +583,6 @@ setup_darwin_volume() {
     setup_synthetic_conf
     setup_fstab
     setup_volume
-    setup_volume_daemon
 }
 
 if [ "$_CREATE_VOLUME_NO_MAIN" = 1 ]; then
@@ -628,13 +593,11 @@ if [ "$_CREATE_VOLUME_NO_MAIN" = 1 ]; then
 else
     # no reason to pay for bash to process this
     main() {
-        # TODO: refactor me
-
         {
             echo ""
             echo "     ------------------------------------------------------------------ "
             echo "    | This installer will create a volume for the nix store and        |"
-            echo "    | configure it to mount at /nix.  Follow these steps to uninstall. |"
+            echo "    | configure it to mount at $NIX_ROOT.  Follow these steps to uninstall. |"
             echo "     ------------------------------------------------------------------ "
             echo ""
             echo "  1. Remove the entry from fstab using 'sudo vifs'"
@@ -646,9 +609,10 @@ else
         } >&2
 
         if test_nix_symlink; then
-            echo "error: /nix is a symlink, please remove it and make sure it's not in synthetic.conf (in which case a reboot is required)" >&2
-            echo "  /nix -> $(readlink "/nix")" >&2
-            exit 2
+            failure >&2 <<EOF
+error: $NIX_ROOT is a symlink (-> $(readlink "$NIX_ROOT")).
+Please remove it. If nix is in /etc/synthetic.conf, remove it and reboot.
+EOF
         fi
 
         setup_darwin_volume

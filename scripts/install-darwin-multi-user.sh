@@ -50,7 +50,19 @@ poly_service_uninstall_directions() {
 }
 
 poly_service_uninstall_prompts() {
-    # echo "$1. Remove macOS-specific components:"
+    # TODO:
+    # nixbld users
+    # ~/.cache/nix
+    # /var/log/nix-daemon.log
+    # /var/root/
+    #   .{nix-channels,nix-profile,nix-defexpr}
+    #   .cache/nix
+    # /etc/
+    #   nix/nix.conf
+    #   bashrc
+    #   bashrc.backup-before-nix
+    #   zshenv
+    #   zshenv.backup-before-nix
     darwin_volume_uninstall_prompts
     if test_nix_daemon_installed; then
         nix_daemon_uninstall_prompt
@@ -67,15 +79,6 @@ EOF
 
 poly_extra_try_me_commands(){
     :
-}
-poly_extra_setup_instructions(){
-    :
-}
-
-poly_extra_uninstall_instructions(){
-    cat <<EOF
-Your system should clean up the empty /nix mount-point directory on reboot.
-EOF
 }
 
 poly_configure_nix_daemon_service() {

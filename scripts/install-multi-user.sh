@@ -57,14 +57,18 @@ headless() {
     fi
 }
 
-contactme() {
+contact_us() {
+    echo "You can open an issue at https://github.com/nixos/nix/issues"
+    echo ""
+    echo "Or feel free to contact the team:"
+    echo " - IRC: in #nixos on irc.freenode.net"
+    echo " - twitter: @nixos_org"
+    echo " - forum: https://discourse.nixos.org"
+}
+get_help() {
     echo "We'd love to help if you need it."
     echo ""
-    echo "If you can, open an issue at https://github.com/nixos/nix/issues"
-    echo ""
-    echo "Or feel free to contact the team,"
-    echo " - on IRC #nixos on irc.freenode.net"
-    echo " - on twitter @nixos_org"
+    contact_us
 }
 
 uninstall_directions() {
@@ -168,7 +172,7 @@ failure() {
     header "oh no!"
     _textout "$RED" "$@"
     echo ""
-    _textout "$RED" "$(contactme)"
+    _textout "$RED" "$(get_help)"
     trap finish_cleanup EXIT
     exit 1
 }
@@ -198,6 +202,33 @@ ui_confirm() {
     echo ""
     return 1
 }
+
+# TODO: maybe "remind" isn't the right idiom since we don't print them initially
+# next steps? followup?
+remind() {
+    header2 "Reminders"
+    exec {reminders}<reminders
+    while read -r -u "$reminders" line; do
+        echo $line
+        if [ "${#line}" = 0 ] && ! headless; then
+            if read -r -p "Press enter/return to acknowledge."; then
+                printf $'\033[A\33[2K\r'
+            fi
+        fi
+    done
+    rm reminders
+}
+((remind_num=1))
+reminder() {
+    printf "$BLUE[ %d ]$ESC\n" "$remind_num"
+    if [ "$*" = "" ]; then
+        cat
+    else
+        echo "$@"
+    fi
+    echo ""
+    ((remind_num++))
+} >> "reminders"
 
 __sudo() {
     local expl="$1"
@@ -244,47 +275,33 @@ trap finish_fail EXIT
 
 channel_update_failed=0
 function finish_success {
-    finish_cleanup
-
     ok "Alright! We're done!"
-    if [ "x$channel_update_failed" = x1 ]; then
-        echo ""
-        echo "But fetching the nixpkgs channel failed. (Are you offline?)"
-        echo "To try again later, run \"sudo -i nix-channel --update nixpkgs\"."
-    fi
 
     cat <<EOF
-
-Before Nix will work in your existing shells, you'll need to close
-them and open them again. Other than that, you should be ready to go.
-
 Try it! Open a new terminal, and type:
 $(poly_extra_try_me_commands)
   $ nix-shell -p nix-info --run "nix-info -m"
-$(poly_extra_setup_instructions)
-Thank you for using this installer. If you have any feedback, don't
-hesitate:
 
-$(contactme)
+Thank you for using this installer. If you have any feedback or need
+help, don't hesitate:
+
+$(contact_us)
 EOF
-
+    remind
+    finish_cleanup
 }
 
 function finish_uninstall_success {
-    finish_cleanup
-
     ok "Alright! Nix should be removed!"
+
     cat <<EOF
+If you spot anything this uninstaller missed or have feedback,
+don't hesitate:
 
-$(poly_extra_uninstall_instructions)
-
-Thanks for using Nix--we hope you'll install again soon. Let us know
-if you notice anything the uninstaller didn't clean up. If you spot
-anything or have any feedback, don't hesitate:
-
-$(contactme)
+$(contact_us)
 EOF
-
+    remind
+    finish_cleanup
 }
 
 
@@ -644,14 +661,15 @@ configure_shell_profile() {
                         tee -a "$profile_target"
         fi
     done
+    reminder "Nix won't work in active shell sessions until you restart them."
 }
 
 setup_default_profile() {
-    _sudo "to installing a bootstrapping Nix in to the default Profile" \
+    _sudo "to install a bootstrapping Nix in to the default profile" \
           HOME="$ROOT_HOME" "$NIX_INSTALLED_NIX/bin/nix-env" -i "$NIX_INSTALLED_NIX"
 
     if [ -z "${NIX_SSL_CERT_FILE:-}" ] || ! [ -f "${NIX_SSL_CERT_FILE:-}" ]; then
-        _sudo "to installing a bootstrapping SSL certificate just for Nix in to the default Profile" \
+        _sudo "to install a bootstrapping SSL certificate just for Nix in to the default profile" \
               HOME="$ROOT_HOME" "$NIX_INSTALLED_NIX/bin/nix-env" -i "$NIX_INSTALLED_CACERT"
         export NIX_SSL_CERT_FILE=/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt
     fi
@@ -660,9 +678,13 @@ setup_default_profile() {
         # Have to explicitly pass NIX_SSL_CERT_FILE as part of the sudo call,
         # otherwise it will be lost in environments where sudo doesn't pass
         # all the environment variables by default.
-        _sudo "to update the default channel in the default profile" \
-            HOME="$ROOT_HOME" NIX_SSL_CERT_FILE="$NIX_SSL_CERT_FILE" "$NIX_INSTALLED_NIX/bin/nix-channel" --update nixpkgs \
-            || channel_update_failed=1
+        if ! _sudo "to update the default channel in the default profile" \
+            HOME="$ROOT_HOME" NIX_SSL_CERT_FILE="$NIX_SSL_CERT_FILE" "$NIX_INSTALLED_NIX/bin/nix-channel" --update nixpkgs; then
+            reminder <<EOF
+I had trouble fetching the nixpkgs channel (are you offline?)
+To try again later, run: sudo -i nix-channel --update nixpkgs
+EOF
+        fi
     fi
 }
 
@@ -696,7 +718,7 @@ main() {
 
     if ! ui_confirm "Ready to continue?"; then
         ok "Alright, no changes have been made :)"
-        contactme
+        get_help
         trap finish_cleanup EXIT
         exit 1
     fi
@@ -738,11 +760,11 @@ uninstall() {
     # uninstall report
     if ! ui_confirm "Ready to continue?"; then
         ok "Alright, no changes have been made :)"
-        contactme
+        get_help
         trap finish_cleanup EXIT
         exit 1
     fi
-    
+
     poly_service_uninstall_prompts
 
     trap finish_uninstall_success EXIT
