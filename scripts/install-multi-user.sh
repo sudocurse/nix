@@ -206,21 +206,22 @@ ui_confirm() {
 # TODO: maybe "remind" isn't the right idiom since we don't print them initially
 # next steps? followup?
 remind() {
-    header "Reminders"
-    if headless; then
-        cat "$SCRATCH/reminders"
-    else
-        exec 11<"$SCRATCH/reminders"
-        while read -r -u 11 line; do
-            echo $line
-            if [ "${#line}" = 0 ]; then
-                if read -r -p "Press enter/return to acknowledge."; then
-                    printf $'\033[A\33[2K\r'
+    if [ -e "$SCRATCH/reminders" ]; then
+        header "Reminders"
+        if headless; then
+            cat "$SCRATCH/reminders"
+        else
+            exec 11<"$SCRATCH/reminders"
+            while read -r -u 11 line; do
+                echo $line
+                if [ "${#line}" = 0 ]; then
+                    if read -r -p "Press enter/return to acknowledge."; then
+                        printf $'\033[A\33[2K\r'
+                    fi
                 fi
-            fi
-        done
+            done
+        fi
     fi
-    # rm reminders
 }
 ((remind_num=1))
 reminder() {
@@ -668,6 +669,9 @@ configure_shell_profile() {
                         tee -a "$profile_target"
         fi
     done
+    # TODO: should we suggest '. $PROFILE_NIX_FILE'? It would get them on
+    # their way less disruptively, but a counter-argument is that they won't
+    # immediately notice if something didn't get set up right?
     reminder "Nix won't work in active shell sessions until you restart them."
 }
 
