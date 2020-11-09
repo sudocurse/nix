@@ -480,7 +480,7 @@ create_build_users() {
 
 create_directories() {
     # FIXME: remove all of this because it duplicates LocalStore::LocalStore().
-
+    task "Setting up the basic directory structure"
     _sudo "to make the basic directory structure of Nix (part 1)" \
           mkdir -pv -m 0755 /nix /nix/var /nix/var/log /nix/var/log/nix /nix/var/log/nix/drvs /nix/var/nix{,/db,/gcroots,/profiles,/temproots,/userpool} /nix/var/nix/{gcroots,profiles}/per-user
 
@@ -611,6 +611,7 @@ EOF
 }
 
 install_from_extracted_nix() {
+    task "Installing Nix"
     (
         cd "$EXTRACTED_NIX_PATH"
 
@@ -647,6 +648,7 @@ EOF
 }
 
 configure_shell_profile() {
+    task "Setting up shell profiles: ${PROFILE_TARGETS[@]}"
     for profile_target in "${PROFILE_TARGETS[@]}"; do
         if [ -e "$profile_target" ]; then
             _sudo "to back up your current $profile_target to $profile_target$PROFILE_BACKUP_SUFFIX" \
@@ -670,6 +672,7 @@ configure_shell_profile() {
 }
 
 setup_default_profile() {
+    task "Setting up the default profile"
     _sudo "to install a bootstrapping Nix in to the default profile" \
           HOME="$ROOT_HOME" "$NIX_INSTALLED_NIX/bin/nix-env" -i "$NIX_INSTALLED_NIX"
 

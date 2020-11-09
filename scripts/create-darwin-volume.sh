@@ -8,7 +8,7 @@ if [ "${1-}" = "no-main" ]; then
 else
     readonly _CREATE_VOLUME_NO_MAIN=0
     # declare some things we expect to inherit from install-multi-user
-    # I don't love this...
+    # I don't love this (because it's a bit of a kludge)
     readonly NIX_ROOT="${NIX_ROOT:-/nix}"
     readonly ESC='\033[0m'
     readonly GREEN='\033[32m'
@@ -24,6 +24,9 @@ else
             echo "$@"
         fi
         exit 1
+    }
+    task() {
+        echo "$@"
     }
 fi
 
@@ -509,7 +512,7 @@ EOF
 
 setup_synthetic_conf() {
     if ! test_synthetic_conf_mountable; then
-        echo "Configuring /etc/synthetic.conf..." >&2
+        task "Configuring /etc/synthetic.conf to make a mount-point at $NIX_ROOT" >&2
         # TODO: technically /etc/synthetic.d/nix is supported in Big Sur+
         # but handling both takes even more code...
         _sudo "to add Nix to /etc/synthetic.conf" \
@@ -541,13 +544,13 @@ EOF
 # known ahead of time) or special device name/path (which is not stable).
 setup_fstab() {
     if ! test_fstab; then
-        echo "Configuring /etc/fstab..." >&2
+        task "Configuring /etc/fstab to specify volume mount options" >&2
         add_nix_vol_fstab_line vifs
         # printf "\$a\nLABEL=%s %s apfs rw,noauto,nobrowse\n.\nwq\n" "${NIX_VOLUME_FOR_FSTAB}" "$NIX_ROOT"| EDITOR=/bin/ed /usr/bin/sudo /usr/sbin/vifs
     fi
 }
 setup_volume() {
-    echo "Creating a Nix volume..." >&2
+    task "Creating a Nix volume" >&2
     _sudo "to create the Nix volume" \
         /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -mountpoint "$NIX_ROOT"
 
@@ -593,7 +596,7 @@ EOF
 
 setup_volume_daemon() {
     if ! test_voldaemon; then
-        echo "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'..." >&2
+        task "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'" >&2
         generate_mount_daemon "$1" | _sudo "to install the Nix volume mounter" \
             dd of="$NIX_VOLUME_MOUNTD_DEST" 2>/dev/null
 

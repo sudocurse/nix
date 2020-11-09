@@ -84,6 +84,7 @@ EOF
 
 poly_configure_nix_daemon_service() {
     if [ -e /run/systemd/system ]; then
+        task "Setting up the nix-daemon systemd service"
         _sudo "to set up the nix-daemon service" \
               systemctl link "/nix/var/nix/profiles/default$SERVICE_SRC"
 

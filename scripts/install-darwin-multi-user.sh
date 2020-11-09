@@ -99,6 +99,7 @@ poly_extra_try_me_commands(){
 }
 
 poly_configure_nix_daemon_service() {
+    task "Setting up the nix-daemon LaunchDaemon"
     _sudo "to set up the nix-daemon as a LaunchDaemon" \
           cp -f "/nix/var/nix/profiles/default$NIX_DAEMON_DEST" "$NIX_DAEMON_DEST"
 
@@ -107,7 +108,6 @@ poly_configure_nix_daemon_service() {
 
     _sudo "to start the nix-daemon" \
           launchctl start org.nixos.nix-daemon
-
 }
 
 poly_group_exists() {
@@ -206,6 +206,14 @@ poly_create_build_user() {
 
 poly_prepare_to_install() {
     if should_create_volume; then
+        task "Creating a Nix volume"
+        # intentional indent below to match task indent
+        cat <<EOF
+    Nix traditionally stores its data in the root directory $NIX_ROOT, but
+    macOS now (starting in 10.15 Catalina) has a read-only root directory.
+    To support Nix, I will create a volume and configure macOS to mount it
+    at $NIX_ROOT.
+EOF
         setup_darwin_volume
     fi
 }
