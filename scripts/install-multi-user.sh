@@ -206,17 +206,21 @@ ui_confirm() {
 # TODO: maybe "remind" isn't the right idiom since we don't print them initially
 # next steps? followup?
 remind() {
-    header2 "Reminders"
-    exec {reminders}<reminders
-    while read -r -u "$reminders" line; do
-        echo $line
-        if [ "${#line}" = 0 ] && ! headless; then
-            if read -r -p "Press enter/return to acknowledge."; then
-                printf $'\033[A\33[2K\r'
+    header "Reminders"
+    if headless; then
+        cat "$SCRATCH/reminders"
+    else
+        exec 11<"$SCRATCH/reminders"
+        while read -r -u 11 line; do
+            echo $line
+            if [ "${#line}" = 0 ]; then
+                if read -r -p "Press enter/return to acknowledge."; then
+                    printf $'\033[A\33[2K\r'
+                fi
             fi
-        fi
-    done
-    rm reminders
+        done
+    fi
+    # rm reminders
 }
 ((remind_num=1))
 reminder() {
@@ -228,7 +232,7 @@ reminder() {
     fi
     echo ""
     ((remind_num++))
-} >> "reminders"
+} >> "$SCRATCH/reminders"
 
 __sudo() {
     local expl="$1"
@@ -498,6 +502,7 @@ place_channel_configuration() {
     fi
 }
 
+# TODO: figure out how to work new darwin step in here :(
 welcome_to_nix() {
     ok "Welcome to the Multi-User Nix Installation"
 
@@ -757,8 +762,17 @@ uninstall() {
         failure "Sorry, I don't know what to do on $(uname)"
     fi
 
-    # uninstall report
-    if ! ui_confirm "Ready to continue?"; then
+    cat <<EOF
+I'll need to invoke 'sudo' a lot to uninstall Nix. As with the installer, I
+will not prompt you each time--but I will show you the sudo commands as I run
+them.
+
+I'll prompt you before I clean up each component:
+- If something exists just for Nix, I'll ask you if I can remove it.
+- Otherwise, I'll show you a diff of the edit I'd like to make.
+EOF
+    # uninstall report?
+    if ! ui_confirm "Are you sure you want to uninstall Nix?"; then
         ok "Alright, no changes have been made :)"
         get_help
         trap finish_cleanup EXIT
@@ -775,11 +789,10 @@ case "${1-}" in
     uninstall)
         shift
         uninstall "$@";;
-    install)
+    ""|install|*)
+        if ! [ "${#@}" = 0 ]; then
+            shift
+        fi
         # same as the no-arg condition for now (but, explicit)
-        shift
-        main "$@";;
-    *)
-        shift
         main "$@";;
 esac

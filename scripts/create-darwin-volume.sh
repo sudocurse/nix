@@ -66,7 +66,11 @@ confirm_rm() {
     fi
 }
 confirm_edit() {
-    echo "I might be able to help you make this edit. Here's the diff:"
+    cat <<EOF
+It looks like Nix isn't the only thing here, but I think I know how to edit it
+out. Here's the diff:
+EOF
+
     # could technically test the diff, but caller should do it
     _diff "$1" "$2"
     if ui_confirm "Does the change above look right?"; then
@@ -198,22 +202,32 @@ uninstall_launch_daemon_directions() {
       "  sudo rm $2"
 }
 uninstall_launch_daemon_prompt() {
-    if ui_confirm "Can I uninstall the LaunchDaemon $1?"; then
+    cat <<EOF
+The installer added the LaunchDaemon $1,
+which is responsible for $3.
+EOF
+    if ui_confirm "Can I remove it?"; then
         _sudo "to terminate the daemon" launchctl bootout "system/$1"
         _sudo "to remove the daemon definition" rm "$2"
     fi
 }
 nix_volume_mountd_uninstall_directions() {
-    uninstall_launch_daemon_directions "org.nixos.darwin-store" "$NIX_VOLUME_MOUNTD_DEST"
+    uninstall_launch_daemon_directions "org.nixos.darwin-store" \
+        "$NIX_VOLUME_MOUNTD_DEST"
 }
 nix_volume_mountd_uninstall_prompt() {
-    uninstall_launch_daemon_prompt "org.nixos.darwin-store" "$NIX_VOLUME_MOUNTD_DEST"
+    uninstall_launch_daemon_prompt "org.nixos.darwin-store" \
+        "$NIX_VOLUME_MOUNTD_DEST" \
+        "mounting your Nix volume"
 }
 nix_daemon_uninstall_directions() {
-    uninstall_launch_daemon_directions "org.nixos.nix-daemon" "$NIX_DAEMON_DEST"
+    uninstall_launch_daemon_directions "org.nixos.nix-daemon" \
+        "$NIX_DAEMON_DEST"
 }
 nix_daemon_uninstall_prompt() {
-    uninstall_launch_daemon_prompt "org.nixos.nix-daemon" "$NIX_DAEMON_DEST"
+    uninstall_launch_daemon_prompt "org.nixos.nix-daemon" \
+        "$NIX_DAEMON_DEST" \
+        "running the nix-daemon"
 }
 
 synthetic_conf_uninstall_directions() {
@@ -226,6 +240,11 @@ synthetic_conf_uninstall_directions() {
 
 # TODO: this prompted for removal, but context was poor
 synthetic_conf_uninstall_prompt() {
+    cat <<EOF
+During install, I add '${NIX_ROOT:1}' to /etc/synthetic.conf, which
+instructs macOS to create an empty root directory where I can mount
+the Nix volume. If nix is the only item in synthetic.conf
+EOF
     # there are a few things we can do here
     # 1. if grep -v didn't match anything (also, if there's no diff), we know this is moot
     # 2. if grep -v was empty (but did match?) I think we know that we can just remove the file
@@ -277,6 +296,10 @@ fstab_uninstall_directions() {
       "  Otherwise, run 'sudo vifs' to remove the nix line"
 }
 fstab_uninstall_prompt() {
+    cat <<EOF
+During install, I add '${NIX_ROOT}' to /etc/fstab so that macOS knows what
+mount options to use for the Nix volume.
+EOF
     cp /etc/fstab "$SCRATCH/fstab.edit"
     # technically doesn't need the _sudo path, but throwing away the
     # output is probably better than mostly-duplicating the code...
@@ -492,7 +515,7 @@ setup_synthetic_conf() {
         _sudo "to add Nix to /etc/synthetic.conf" \
             ex /etc/synthetic.conf <<EOF
 :a
-${NIX_ROOT:1} apfs rw,noauto,nobrowse
+${NIX_ROOT:1}
 .
 :x
 EOF

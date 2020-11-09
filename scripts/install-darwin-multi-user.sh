@@ -6,6 +6,14 @@ set -o pipefail
 readonly NIX_DAEMON_DEST=/Library/LaunchDaemons/org.nixos.nix-daemon.plist
 # create by default; set 0 to DIY, use a symlink, etc.
 readonly NIX_VOLUME_CREATE=${NIX_VOLUME_CREATE:-1} # now default
+readonly root_writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
+
+if [ "$root_writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
+    should_create_volume() { return 0; }
+else
+    should_create_volume() { return 1; }
+fi
+
 
 # TODO: I'm trying to decide between how well-contained the darwin-volume
 # stuff should stay here. Current goal is to source create-darwin-volume.sh
@@ -28,9 +36,9 @@ poly_validate_assumptions() {
     if [ "$(uname -s)" != "Darwin" ]; then
         failure "This script is for use with macOS!"
     fi
-    writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
 
-    if [ "$writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
+
+    if should_create_volume; then
         # we need to create a Nix volume (if it doesn't exist)
         darwin_volume_uninstall_prompts
         # darwin_volume_validate_assumptions
@@ -38,12 +46,18 @@ poly_validate_assumptions() {
 }
 
 poly_service_installed_check() {
-    test_nix_daemon_installed || test_nix_volume_mountd_installed
+    if should_create_volume; then
+        test_nix_daemon_installed || test_nix_volume_mountd_installed
+    else
+        test_nix_daemon_installed
+    fi
 }
 
 poly_service_uninstall_directions() {
     echo "$1. Remove macOS-specific components:"
-    darwin_volume_uninstall_directions
+    if should_create_volume && test_nix_volume_mountd_installed; then
+        darwin_volume_uninstall_directions
+    fi
     if test_nix_daemon_installed; then
         nix_daemon_uninstall_directions
     fi
@@ -63,7 +77,10 @@ poly_service_uninstall_prompts() {
     #   bashrc.backup-before-nix
     #   zshenv
     #   zshenv.backup-before-nix
-    darwin_volume_uninstall_prompts
+    if should_create_volume && test_nix_volume_mountd_installed; then
+        darwin_volume_uninstall_prompts
+    fi
+
     if test_nix_daemon_installed; then
         nix_daemon_uninstall_prompt
     fi
@@ -188,5 +205,7 @@ poly_create_build_user() {
 }
 
 poly_prepare_to_install() {
-    setup_darwin_volume
+    if should_create_volume; then
+        setup_darwin_volume
+    fi
 }
