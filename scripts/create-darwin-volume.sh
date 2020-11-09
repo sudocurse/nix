@@ -210,7 +210,14 @@ The installer added the LaunchDaemon $1,
 which is responsible for $3.
 EOF
     if ui_confirm "Can I remove it?"; then
-        _sudo "to terminate the daemon" launchctl bootout "system/$1"
+        if ! _sudo "to terminate the daemon" launchctl bootout "system/$1"; then
+            # this can "fail" with a message like:
+            # Boot-out failed: 36: Operation now in progress
+            # I gather it still works, but let's test
+            ! _sudo "to confirm its removal" launchctl blame "system/$1" 2>/dev/null
+            # if already removed, this returned 113 and emitted roughly:
+            # Could not find service "$1" in domain for system
+        fi
         _sudo "to remove the daemon definition" rm "$2"
     fi
 }
