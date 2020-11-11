@@ -755,45 +755,11 @@ main() {
     trap finish_success EXIT
 }
 
-uninstall() {
-    # TODO: de-duplicate if the install/uninstall logic stays together
-    if [ "$(uname -s)" = "Darwin" ]; then
-        # shellcheck source=./install-darwin-multi-user.sh
-        . "$EXTRACTED_NIX_PATH/install-darwin-multi-user.sh"
-    elif [ "$(uname -s)" = "Linux" ]; then
-        # shellcheck source=./install-systemd-multi-user.sh
-        . "$EXTRACTED_NIX_PATH/install-systemd-multi-user.sh" # most of this works on non-systemd distros also
-    else
-        failure "Sorry, I don't know what to do on $(uname)"
-    fi
-
-    cat <<EOF
-I'll need to invoke 'sudo' a lot to uninstall Nix. As with the installer, I
-will not prompt you each time--but I will show you the sudo commands as I run
-them.
-
-I'll prompt you before I clean up each component:
-- If something exists just for Nix, I'll ask you if I can remove it.
-- Otherwise, I'll show you a diff of the edit I'd like to make.
-EOF
-    # uninstall report?
-    if ! ui_confirm "Are you sure you want to uninstall Nix?"; then
-        ok "Alright, no changes have been made :)"
-        get_help
-        trap finish_cleanup EXIT
-        exit 1
-    fi
-
-    poly_service_uninstall_prompts
-
-    trap finish_uninstall_success EXIT
-}
-
 # ACTION for override
 case "${1-}" in
-    uninstall)
-        shift
-        uninstall "$@";;
+    # uninstall)
+    #     shift
+    #     uninstall "$@";;
     ""|install|*)
         if ! [ "${#@}" = 0 ]; then
             shift

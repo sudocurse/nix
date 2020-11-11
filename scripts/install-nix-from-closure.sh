@@ -72,8 +72,6 @@ while [ $# -gt 0 ]; do
                 echo "         is no longer needed and will be removed in the future."
                 echo ""
             } >&2;;
-        --uninstall)
-            ACTION="uninstall";;
         --nix-extra-conf-file)
             export NIX_EXTRA_CONF="$(cat $2)"
             shift;;
