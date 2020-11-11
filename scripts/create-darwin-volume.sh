@@ -445,80 +445,6 @@ keychain_label_uninstall_directions() {
       "  sudo security delete-generic-password -a '$NIX_VOLUME_LABEL'"
 }
 
-# TODO:
-# - some of these are obsoleted by better uninstall directions elsewhere
-# - if the "curing" approach wins out, several of these can be cut, or only
-#   be errors if curing fails, or... something?
-darwin_volume_validate_assumptions() {
-    if test -e "$NIX_ROOT"; then
-        if test_nix_symlink; then
-            if test_synthetic_conf_symlinked; then
-                failure <<EOF
-$NIX_ROOT is a symlink (maybe because it is included in /etc/synthetic.conf?)
-Remove it from synthetic.conf, reboot, and confirm it is not linked.
-  $NIX_ROOT -> $(readlink "$NIX_ROOT")
-EOF
-            else
-                failure <<EOF
-$NIX_ROOT is a symlink (to $(readlink "$NIX_ROOT")) for some reason.
-You'll have to remove this symlink before I can create the Nix volume.
-EOF
-            fi
-        elif test_synthetic_conf_symlinked; then
-            failure "Please remove the nix line from /etc/synthetic.conf and reboot before continuing."
-        elif test_synthetic_conf_mountable; then
-            # TODO: consider whether this is an error or a warning.
-            # It would be more ideal to just collect this as a bit of known cruft
-            # but only tell the user to go clean everything up if we hit something
-            # that is absolutely a dealbreaker later...
-            failure <<EOF
-nix is already in /etc/synthetic.conf, probably from a previous install.
-Please remove it and reboot before continuing.
-EOF
-        else
-            failure "$NIX_ROOT already exists."
-        fi
-    fi
-    if test_synthetic_conf_symlinked; then
-        failure "Please remove the nix line from /etc/synthetic.conf before continuing."
-    fi
-    if test_synthetic_conf_mountable; then
-        # TODO: consider whether this is an error or a warning.
-        # It would be more ideal to just collect this as a bit of known cruft
-        # but only tell the user to go clean everything up if we hit something
-        # that is absolutely a dealbreaker later...
-        failure <<EOF
-nix is already in /etc/synthetic.conf, probably from a previous install.
-Please remove it before continuing.
-EOF
-    fi
-    if find_nix_volume "$NIX_VOLUME_USE_DISK"; then
-        failure <<EOF
-$NIX_VOLUME_USE_DISK already has a '$NIX_VOLUME_LABEL' volume, but the
-installer is configured to create a new one. Set NIX_VOLUME_CREATE=0
-to tell the installer to use your volume instead of creating one.
-
-Volume information:
-$(diskutil info "$NIX_VOLUME_LABEL")
-EOF
-    fi
-    if test_fstab; then
-        # TODO: re-use uninstall instrs?
-        failure <<EOF
-$NIX_ROOT is already in /etc/fstab, probably from a previous install.
-Please remove it before continuing.
-EOF
-    fi
-    if test_nix_volume_mountd_installed; then
-        # TODO: better message, less haste
-        failure "Nix volume mounter already installed."
-    fi
-    if test_keychain_by_label; then
-        # TODO: better message, less haste
-        failure "Keychain already has a credential for Nix volume mounter."
-    fi
-}
-
 setup_synthetic_conf() {
     if ! test_synthetic_conf_mountable; then
         task "Configuring /etc/synthetic.conf to make a mount-point at $NIX_ROOT" >&2
@@ -563,15 +489,6 @@ setup_volume() {
     _sudo "to create the Nix volume" \
         /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -mountpoint "$NIX_ROOT"
 
-    # if [ "$INSTALL_MODE" = "no-daemon" ]; then # exported by caller
-    #     # TODO:
-    #     # - is there a better way to do this?
-    #     # - technically not needed since daemon is default, but I'm trying
-    #     # to minimize unnecessary breaks for now
-    #     /usr/bin/sudo /usr/sbin/chown "$USER:admin" /nix
-    # fi
-    #
-    #
     # Notes:
     # 1) system is in some sense less secure than user keychain... (it's
     # possible to read the password for decrypting the keychain) but

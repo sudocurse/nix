@@ -55,29 +55,6 @@ poly_service_uninstall_directions() {
     fi
 }
 
-poly_service_uninstall_prompts() {
-    # TODO:
-    # nixbld users
-    # ~/.cache/nix
-    # /var/log/nix-daemon.log
-    # /var/root/
-    #   .{nix-channels,nix-profile,nix-defexpr}
-    #   .cache/nix
-    # /etc/
-    #   nix/nix.conf
-    #   bashrc
-    #   bashrc.backup-before-nix
-    #   zshenv
-    #   zshenv.backup-before-nix
-    if should_create_volume && test_nix_volume_mountd_installed; then
-        darwin_volume_uninstall_prompts
-    fi
-
-    if test_nix_daemon_installed; then
-        nix_daemon_uninstall_prompt
-    fi
-}
-
 poly_service_setup_note() {
     if should_create_volume; then
         echo " - create a Nix volume and a LaunchDaemon to mount it"
