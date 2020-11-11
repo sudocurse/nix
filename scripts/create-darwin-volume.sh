@@ -34,7 +34,7 @@ fi
 readonly NIX_VOLUME_FS="${NIX_VOLUME_FS:-APFS}"
 readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix}"
 # shellcheck disable=SC1003,SC2026
-readonly NIX_VOLUME_FOR_FSTAB="${NIX_VOLUME_LABEL/ /'\\\'040}"
+readonly NIX_VOLUME_FOR_FSTAB="${NIX_VOLUME_LABEL/ /'\\\'040}" # pre-escaped
 readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemons/org.nixos.darwin-store.plist}"
 
 # i.e., "disk1"
@@ -48,8 +48,7 @@ readonly ROOT_SPECIAL_DEVICE="$(root_disk_identifier)" # usually 'disk1'
 readonly NIX_VOLUME_USE_DISK="${NIX_VOLUME_USE_DISK:-$ROOT_SPECIAL_DEVICE}"
 
 substep(){
-    # shellcheck disable=SC2068
-    printf "   %s\n" "" "- $1" "" ${@:2}
+    printf "   %s\n" "" "- $1" "" "${@:2}"
 }
 
 printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC" # "dim"
@@ -58,8 +57,7 @@ printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC" # "dim"
 printf -v _OLD_LINE_FMT "%b" $'\033[1;7;31m-'"$ESC ${RED}%L${ESC}"
 printf -v _NEW_LINE_FMT "%b" $'\033[1;7;32m+'"$ESC ${GREEN}%L${ESC}"
 _diff() {
-    # shellcheck disable=SC2068
-    /usr/bin/diff --unchanged-group-format="$_UNCHANGED_GRP_FMT" --old-line-format="$_OLD_LINE_FMT" --new-line-format="$_NEW_LINE_FMT" --unchanged-line-format="  %L" $@
+    /usr/bin/diff --unchanged-group-format="$_UNCHANGED_GRP_FMT" --old-line-format="$_OLD_LINE_FMT" --new-line-format="$_NEW_LINE_FMT" --unchanged-line-format="  %L" "$@"
 }
 
 confirm_rm() {
@@ -217,7 +215,11 @@ EOF
             # this can "fail" with a message like:
             # Boot-out failed: 36: Operation now in progress
             # I gather it still works, but let's test
-            ! _sudo "to confirm its removal" launchctl blame "system/$1" 2>/dev/null
+            # launchctl blame will *fail* if it has been removed
+            if ! _sudo "to confirm its removal" \
+                launchctl blame "system/$1" 2>/dev/null; then
+                failure "error: failed to unload LaunchDaemon system/$1"
+            fi
             # if already removed, this returned 113 and emitted roughly:
             # Could not find service "$1" in domain for system
         fi
@@ -245,10 +247,9 @@ nix_daemon_uninstall_prompt() {
 
 synthetic_conf_uninstall_directions() {
     # :1 to strip leading slash
-    # shellcheck disable=SC2086
     substep "Remove ${NIX_ROOT:1} from /etc/synthetic.conf" \
         "  If nix is the only entry: sudo rm /etc/synthetic.conf" \
-        "  Otherwise: grep -v "^${NIX_ROOT:1}$" /etc/synthetic.conf | sudo dd of=/etc/synthetic.conf"
+        "  Otherwise: grep -v '^${NIX_ROOT:1}$' /etc/synthetic.conf | sudo dd of=/etc/synthetic.conf"
 }
 
 synthetic_conf_uninstall_prompt() {
@@ -261,8 +262,7 @@ EOF
     # 1. if grep -v didn't match anything (also, if there's no diff), we know this is moot
     # 2. if grep -v was empty (but did match?) I think we know that we can just remove the file
     # 3. if the edit doesn't ~empty the file, show them the diff and ask
-    # shellcheck disable=SC2086
-    if ! grep -v "^${NIX_ROOT:1}$" /etc/synthetic.conf > $SCRATCH/synthetic.conf.edit; then
+    if ! grep -v '^'"${NIX_ROOT:1}"'$' /etc/synthetic.conf > "$SCRATCH/synthetic.conf.edit"; then
         if confirm_rm "/etc/synthetic.conf"; then
             return 0
         fi
@@ -284,7 +284,6 @@ EOF
 }
 
 add_nix_vol_fstab_line() {
-    # shellcheck disable=SC2068
     EDITOR="ex" _sudo "to add nix to fstab" "$@" <<EOF
 :a
 LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw,noauto,nobrowse
@@ -298,7 +297,6 @@ delete_nix_vol_fstab_line() {
     # but it might be nice to generalize a smidge further to
     # go ahead and set up a pattern for curing "old" things
     # we no longer do?
-    # shellcheck disable=SC2068
     EDITOR="patch" _sudo "to cut nix from fstab" "$@" < <(diff /etc/fstab <(grep -v "LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw" /etc/fstab))
     # left ",noauto,nobrowse" out of the grep; people might fiddle this a little
 }
@@ -540,8 +538,7 @@ setup_darwin_volume() {
 }
 
 if [ "$_CREATE_VOLUME_NO_MAIN" = 1 ]; then
-    # shellcheck disable=SC2198
-    if [ -n "$@" ]; then
+    if [ -n "$*" ]; then
         "$@" # expose functions in case we want multiple routines?
     fi
 else

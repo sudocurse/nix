@@ -14,6 +14,7 @@ else
     should_create_volume() { return 1; }
 fi
 
+# shellcheck source=./install-darwin-multi-user.sh
 . "$EXTRACTED_NIX_PATH/create-darwin-volume.sh" "no-main"
 
 dsclattr() {

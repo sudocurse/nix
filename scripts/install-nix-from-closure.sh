@@ -26,7 +26,7 @@ fi
 
 # macOS support for 10.12.6 or higher
 if [ "$(uname -s)" = "Darwin" ]; then
-    IFS='.' read macos_major macos_minor macos_patch << EOF
+    IFS='.' read -r macos_major macos_minor macos_patch << EOF
 $(sw_vers -productVersion)
 EOF
     if [ "$macos_major" -lt 10 ] || { [ "$macos_major" -eq 10 ] && [ "$macos_minor" -lt 12 ]; } || { [ "$macos_minor" -eq 12 ] && [ "$macos_patch" -lt 6 ]; }; then
@@ -73,7 +73,8 @@ while [ $# -gt 0 ]; do
                 echo ""
             } >&2;;
         --nix-extra-conf-file)
-            export NIX_EXTRA_CONF="$(cat $2)"
+            # shellcheck disable=SC2155
+            export NIX_EXTRA_CONF="$(cat "$2")"
             shift;;
         *)
             {
@@ -161,6 +162,7 @@ if ! "$nix/bin/nix-store" --load-db < "$self/.reginfo"; then
     exit 1
 fi
 
+# shellcheck source=./nix-profile.sh.in
 . "$nix/etc/profile.d/nix.sh"
 
 if ! "$nix/bin/nix-env" -i "$nix"; then
