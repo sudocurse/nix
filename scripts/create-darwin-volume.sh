@@ -526,7 +526,7 @@ setup_volume_daemon() {
     if ! test_voldaemon; then
         task "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'" >&2
         generate_mount_daemon "$1" | _sudo "to install the Nix volume mounter" \
-            dd of="$NIX_VOLUME_MOUNTD_DEST" 2>/dev/null
+            /bin/dd of="$NIX_VOLUME_MOUNTD_DEST" 2>/dev/null
 
         _sudo "to launch the Nix volume mounter" \
             /bin/launchctl bootstrap system "$NIX_VOLUME_MOUNTD_DEST"
