@@ -649,7 +649,7 @@ EOF
 }
 
 configure_shell_profile() {
-    task "Setting up shell profiles: ${PROFILE_TARGETS[@]}"
+    task "Setting up shell profiles: ${PROFILE_TARGETS[*]}"
     for profile_target in "${PROFILE_TARGETS[@]}"; do
         if [ -e "$profile_target" ]; then
             _sudo "to back up your current $profile_target to $profile_target$PROFILE_BACKUP_SUFFIX" \
