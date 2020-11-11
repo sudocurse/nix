@@ -317,22 +317,20 @@ EOF
     # output is probably better than mostly-duplicating the code...
     delete_nix_vol_fstab_line patch "$SCRATCH/fstab.edit" &>/dev/null
 
-    # if the patch test test, minus comment lines, is equal to empty (:)
+    # if the patch test edit, minus comment lines, is equal to empty (:)
     if diff -q <(:) <(grep -v "^#" "$SCRATCH/fstab.edit") &>/dev/null; then
         # this edit would leave it empty; propose deleting it
         if confirm_rm "/etc/fstab"; then
             return 0
         else
-            # TODO: fallback instructions
-            echo "Manually remove nix from /etc/fstab"
+            echo "Remove nix from /etc/fstab (or remove the file)"
         fi
     else
         echo "I might be able to help you make this edit. Here's the diff:"
         if ! _diff "/etc/fstab" "$SCRATCH/fstab.edit" && ui_confirm "Does the change above look right?"; then
             delete_nix_vol_fstab_line vifs
         else
-            # TODO: fallback instructions
-            echo "Manually remove nix from /etc/fstab"
+            echo "Remove nix from /etc/fstab (or remove the file)"
         fi
     fi
 }
@@ -352,7 +350,6 @@ darwin_volume_uninstall_directions() {
     fi
     if find_nix_volume "$NIX_VOLUME_USE_DISK"; then
         volume_uninstall_directions
-        # also handles a keychain entry for this volume
     fi
     # Not certain. Target case is an orphaned credential...
     if ! test_keychain_by_uuid && test_keychain_by_label; then
@@ -412,7 +409,12 @@ volume_uninstall_prompt() {
         and_keychain=" (and its encryption key)"
     fi
     cat <<EOF
-I can delete the Nix volume if you're certain you don't need it.
+$NIX_VOLUME_USE_DISK already has a '$NIX_VOLUME_LABEL' volume, but the
+installer is configured to create a new one.
+
+I can delete the Nix volume if you're certain you don't need it. If
+you want the installer to use your volume instead of creating one,
+set 'NIX_VOLUME_CREATE=0'.
 
 Here are the details of the Nix volume:
 $(diskutil info "$NIX_VOLUME_LABEL")
@@ -520,7 +522,7 @@ EOF
 setup_synthetic_conf() {
     if ! test_synthetic_conf_mountable; then
         task "Configuring /etc/synthetic.conf to make a mount-point at $NIX_ROOT" >&2
-        # TODO: technically /etc/synthetic.d/nix is supported in Big Sur+
+        # technically /etc/synthetic.d/nix is supported in Big Sur+
         # but handling both takes even more code...
         _sudo "to add Nix to /etc/synthetic.conf" \
             ex /etc/synthetic.conf <<EOF
@@ -554,7 +556,6 @@ setup_fstab() {
     if ! test_fstab; then
         task "Configuring /etc/fstab to specify volume mount options" >&2
         add_nix_vol_fstab_line vifs
-        # printf "\$a\nLABEL=%s %s apfs rw,noauto,nobrowse\n.\nwq\n" "${NIX_VOLUME_FOR_FSTAB}" "$NIX_ROOT"| EDITOR=/bin/ed /usr/bin/sudo /usr/sbin/vifs
     fi
 }
 setup_volume() {
@@ -596,9 +597,11 @@ add-generic-password -a "$NIX_VOLUME_LABEL" -s "$new_uuid" -l "$NIX_VOLUME_LABEL
 EOF
         builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
             /usr/sbin/diskutil apfs encryptVolume "$NIX_VOLUME_LABEL" -user disk -stdinpassphrase
+        # using UUID to discriminate FDE
         setup_volume_daemon "$new_uuid"
     else
-        setup_volume_daemon "" # using UUID to discriminate FDE
+        # and unencrypted
+        setup_volume_daemon ""
     fi
 }
 
