@@ -41,7 +41,7 @@ readonly NIX_INSTALLED_CACERT="@cacert@"
 #readonly NIX_INSTALLED_CACERT="/nix/store/7dxhzymvy330i28ii676fl1pqwcahv2f-nss-cacert-3.49.2"
 readonly EXTRACTED_NIX_PATH="$(dirname "$0")"
 
-readonly ROOT_HOME=$(echo ~root) # TODO: VAR=~root works; no substitution needed
+readonly ROOT_HOME=~root
 
 if [ -t 0 ]; then
     readonly IS_HEADLESS='no'
@@ -211,7 +211,7 @@ remind() {
         else
             exec 11<"$SCRATCH/reminders"
             while read -r -u 11 line; do
-                echo $line
+                echo "$line"
                 if [ "${#line}" = 0 ]; then
                     if read -r -p "Press enter/return to acknowledge."; then
                         printf $'\033[A\33[2K\r'
@@ -223,7 +223,7 @@ remind() {
 }
 ((remind_num=1))
 reminder() {
-    printf "$BLUE[ %d ]$ESC\n" "$remind_num"
+    printf "${BLUE}[ %d ]${ESC}\n" "$remind_num"
     if [ "$*" = "" ]; then
         cat
     else
@@ -276,7 +276,6 @@ EOF
 }
 trap finish_fail EXIT
 
-channel_update_failed=0
 function finish_success {
     ok "Alright! We're done!"
 
@@ -626,9 +625,8 @@ $NIX_INSTALLED_NIX.
 EOF
         fi
 
-        cat ./.reginfo \
-            | _sudo "to load data for the first time in to the Nix Database" \
-                   "$NIX_INSTALLED_NIX/bin/nix-store" --load-db
+        _sudo "to load data for the first time in to the Nix Database" \
+              "$NIX_INSTALLED_NIX/bin/nix-store" --load-db < ./.reginfo
 
         echo "      Just finished getting the nix database ready."
     )
@@ -744,6 +742,7 @@ main() {
     configure_shell_profile
 
     set +eu
+    # shellcheck disable=SC1091
     . /etc/profile
     set -eu
 
