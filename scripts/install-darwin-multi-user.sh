@@ -14,11 +14,6 @@ else
     should_create_volume() { return 1; }
 fi
 
-
-# TODO: I'm trying to decide how well-contained the darwin-volume
-# stuff should stay here. It could merge here, in theory, but I'm reluctant
-# to make that jump yet because I'm not certain that single-user macOS will
-# actually go away :)
 . "$EXTRACTED_NIX_PATH/create-darwin-volume.sh" "no-main"
 
 dsclattr() {
@@ -84,11 +79,11 @@ poly_service_uninstall_prompts() {
 }
 
 poly_service_setup_note() {
-    # TODO: add create volume (but like, conditionally)
-    cat <<EOF
- - load and start a LaunchDaemon (at $NIX_DAEMON_DEST) for nix-daemon
-
-EOF
+    if should_create_volume; then
+        echo " - create a Nix volume and a LaunchDaemon to mount it"
+    fi
+    echo " - create a LaunchDaemon (at $NIX_DAEMON_DEST) for nix-daemon"
+    echo ""
 }
 
 poly_extra_try_me_commands(){

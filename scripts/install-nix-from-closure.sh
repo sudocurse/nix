@@ -48,7 +48,6 @@ case "$(uname -s)" in
         INSTALL_MODE=no-daemon;;
 esac
 ACTION="install"
-# CREATE_DARWIN_VOLUME=${CREATE_DARWIN_VOLUME:-1} # now default
 # handle the command line flags
 while [ $# -gt 0 ]; do
     case $1 in

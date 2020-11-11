@@ -203,8 +203,6 @@ ui_confirm() {
     return 1
 }
 
-# TODO: maybe "remind" isn't the right idiom since we don't print them initially
-# next steps? followup?
 remind() {
     if [ -e "$SCRATCH/reminders" ]; then
         header "Reminders"
