@@ -414,7 +414,7 @@ set 'NIX_VOLUME_CREATE=0'.
 Here are the details of the Nix volume:
 $(diskutil info "$NIX_VOLUME_LABEL")
 EOF
-    if ui_confirm "Can I delete this volume$and_keychain?"; then
+    if password_confirm "delete this volume$and_keychain"; then
         if [ -n "$and_keychain" ]; then
             _sudo "to remove the volume password from keychain" \
                 security delete-generic-password -s "$(volume_uuid "$NIX_VOLUME_LABEL")"
