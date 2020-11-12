@@ -203,6 +203,13 @@ ui_confirm() {
     return 1
 }
 
+_SERIOUS_BUSINESS="${RED}%s:${ESC} "
+password_confirm() {
+    if ui_confirm "Can I $1?"; then
+        sudo -kv --prompt="$(printf "${_SERIOUS_BUSINESS}" "Enter your password to $1")"
+    fi
+}
+
 remind() {
     if [ -e "$SCRATCH/reminders" ]; then
         header "Reminders"
