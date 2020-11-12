@@ -357,7 +357,10 @@ darwin_volume_uninstall_directions() {
 darwin_volume_uninstall_prompts() {
     if test_synthetic_conf_mountable; then
         if synthetic_conf_uninstall_prompt; then
-            reminder "macOS will clean up the empty mount-point directory at $NIX_ROOT on reboot."
+            # TODO: moot until we tackle uninstall, but this needs to
+            # be conditional (only when we're actually uninstalling)
+            # reminder "macOS will clean up the empty mount-point directory at $NIX_ROOT on reboot."
+            :
         fi
     fi
     if test_fstab; then
