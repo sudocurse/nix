@@ -72,7 +72,7 @@ poly_service_setup_note() {
 EOF
 }
 
-poly_extra_try_me_commands(){
+poly_extra_try_me_commands() {
     if [ -e /run/systemd/system ]; then
         :
     else

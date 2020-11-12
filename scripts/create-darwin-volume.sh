@@ -47,7 +47,7 @@ readonly ROOT_SPECIAL_DEVICE="$(root_disk_identifier)" # usually 'disk1'
 # But you can override NIX_VOLUME_USE_DISK to create it on some other device
 readonly NIX_VOLUME_USE_DISK="${NIX_VOLUME_USE_DISK:-$ROOT_SPECIAL_DEVICE}"
 
-substep(){
+substep() {
     printf "   %s\n" "" "- $1" "" "${@:2}"
 }
 
@@ -128,7 +128,7 @@ test_keychain_by_uuid() {
 }
 
 # Create the paths defined in synthetic.conf, saving us a reboot.
-create_synthetic_objects(){
+create_synthetic_objects() {
     # Big Sur takes away the -B flag we were using and replaces it
     # with a -t flag that appears to do the same thing (but they
     # don't behave exactly the same way in terms of return values).
@@ -153,7 +153,7 @@ test_filevault_in_use() {
     /usr/bin/fdesetup isactive >/dev/null
 }
 
-generate_mount_command(){
+generate_mount_command() {
     if [ "${1-}" = "" ]; then
         printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -s '$1' -w | /usr/sbin/diskutil apfs unlockVolume '$NIX_VOLUME_LABEL' -mountpoint $NIX_ROOT -stdinpassphrase"
     else
@@ -161,7 +161,7 @@ generate_mount_command(){
     fi
 }
 
-generate_mount_daemon(){
+generate_mount_daemon() {
     cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -204,7 +204,7 @@ uninstall_launch_daemon_directions() {
       "  sudo rm $2"
 }
 
-_eat_bootout_err(){
+_eat_bootout_err() {
     grep -v "Boot-out failed: 36: Operation now in progress" 1>&2
 }
 
@@ -291,7 +291,7 @@ EOF
 }
 
 add_nix_vol_fstab_line() {
-    EDITOR="ex" _sudo "to add nix to fstab" "$@" <<EOF
+    EDITOR="/usr/bin/ex" _sudo "to add nix to fstab" "$@" <<EOF
 :a
 LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw,noauto,nobrowse
 .
@@ -304,7 +304,7 @@ delete_nix_vol_fstab_line() {
     # but it might be nice to generalize a smidge further to
     # go ahead and set up a pattern for curing "old" things
     # we no longer do?
-    EDITOR="patch" _sudo "to cut nix from fstab" "$@" < <(diff /etc/fstab <(grep -v "LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw" /etc/fstab))
+    EDITOR="/usr/bin/patch" _sudo "to cut nix from fstab" "$@" < <(diff /etc/fstab <(grep -v "LABEL=$NIX_VOLUME_FOR_FSTAB $NIX_ROOT apfs rw" /etc/fstab))
     # left ",noauto,nobrowse" out of the grep; people might fiddle this a little
 }
 fstab_uninstall_directions() {
@@ -462,7 +462,7 @@ setup_synthetic_conf() {
         # technically /etc/synthetic.d/nix is supported in Big Sur+
         # but handling both takes even more code...
         _sudo "to add Nix to /etc/synthetic.conf" \
-            ex /etc/synthetic.conf <<EOF
+            /usr/bin/ex /etc/synthetic.conf <<EOF
 :a
 ${NIX_ROOT:1}
 .
