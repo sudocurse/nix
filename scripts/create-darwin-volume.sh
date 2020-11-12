@@ -87,8 +87,14 @@ volume_uuid(){
 volume_special_device(){
     /usr/sbin/diskutil info -plist "$1" | xmllint --xpath "(/plist/dict/key[text()='DeviceIdentifier']/following-sibling::string[1]/text())" - 2>/dev/null
 }
+
+# $1 = disk special, $2 = volume label
+find_disk_volume() {
+    /usr/sbin/diskutil apfs list -plist "$1" | xmllint --xpath "(/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[text()='$2'])[1]" - &>/dev/null
+}
+
 find_nix_volume() {
-    /usr/sbin/diskutil apfs list -plist "$1" | xmllint --xpath "(/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[text()='$NIX_VOLUME_LABEL'])[1]" - &>/dev/null
+    find_disk_volume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_LABEL"
 }
 
 test_fstab() {
