@@ -33,6 +33,7 @@ poly_validate_assumptions() {
 
     if should_create_volume; then
         # TODO: tentatively trying out a "curing" approach
+        task "Fixing any leftover Nix volume state"
         darwin_volume_uninstall_prompts
         # darwin_volume_validate_assumptions
     fi
@@ -176,7 +177,7 @@ poly_create_build_user() {
 
 poly_prepare_to_install() {
     if should_create_volume; then
-        task "Creating a Nix volume"
+        header "Preparing a Nix volume"
         # intentional indent below to match task indent
         cat <<EOF
     Nix traditionally stores its data in the root directory $NIX_ROOT, but
