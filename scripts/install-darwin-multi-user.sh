@@ -65,7 +65,7 @@ poly_service_setup_note() {
     echo ""
 }
 
-poly_extra_try_me_commands(){
+poly_extra_try_me_commands() {
     :
 }
 
