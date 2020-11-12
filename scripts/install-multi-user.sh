@@ -210,35 +210,47 @@ password_confirm() {
     fi
 }
 
+# Support accumulating reminders over the course of a run and showing
+# them at the end. An example where this helps: the installer changes
+# something, but it won't work without a reboot. If you tell the user
+# when you do it, they may miss it in the stream. The value of the
+# setting isn't enough to decide whether to message because you only
+# need to message if you *changed* it.
+
+# reminders stored in array delimited by empty entry; if ! headless,
+# user is asked to confirm after each delimiter.
+_reminders=()
+((_remind_num=1))
+
 remind() {
-    if [ -e "$SCRATCH/reminders" ]; then
+    if ! [ "${#_reminders}" = 0 ]; then
         header "Reminders"
-        if headless; then
-            cat "$SCRATCH/reminders"
-        else
-            exec 11<"$SCRATCH/reminders"
-            while read -r -u 11 line; do
-                echo "$line"
-                if [ "${#line}" = 0 ]; then
-                    if read -r -p "Press enter/return to acknowledge."; then
-                        printf $'\033[A\33[2K\r'
-                    fi
+        for line in "${_reminders[@]}"; do
+            echo "$line"
+            if ! headless && [ "${#line}" = 0 ]; then
+                if read -r -p "Press enter/return to acknowledge."; then
+                    printf $'\033[A\33[2K\r'
                 fi
-            done
-        fi
+            fi
+        done
     fi
 }
-((remind_num=1))
+
 reminder() {
-    printf "${BLUE}[ %d ]${ESC}\n" "$remind_num"
+    printf -v label "${BLUE}[ %d ]${ESC}" "$_remind_num"
+    _reminders+=("$label")
     if [ "$*" = "" ]; then
-        cat
+        while read -r line; do
+            _reminders+=("$line")
+        done
     else
-        echo "$@"
+        # this expands each arg to an array entry (and each entry will
+        # ultimately be a separate line in the output)
+        _reminders+=("$@")
     fi
-    echo ""
-    ((remind_num++))
-} >> "$SCRATCH/reminders"
+    _reminders+=("")
+    ((_remind_num++))
+}
 
 __sudo() {
     local expl="$1"
