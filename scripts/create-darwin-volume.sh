@@ -68,6 +68,7 @@ confirm_rm() {
 }
 confirm_edit() {
     cat <<EOF
+
 It looks like Nix isn't the only thing here, but I think I know how to edit it
 out. Here's the diff:
 EOF
@@ -209,6 +210,7 @@ _eat_bootout_err(){
 
 uninstall_launch_daemon_prompt() {
     cat <<EOF
+
 The installer added $1 (a LaunchDaemon
 to $3).
 EOF
@@ -387,6 +389,7 @@ darwin_volume_uninstall_prompts() {
 # case is handled in volume_uninstall_prompt.
 keychain_label_uninstall_prompt() {
     cat <<EOF
+
 It looks like your keychain has at least 1 orphaned volume password.
 I can help delete these if you like, or you can clean them up later.
 EOF
@@ -413,6 +416,7 @@ volume_uninstall_prompt() {
         and_keychain=" (and its encryption key)"
     fi
     cat <<EOF
+
 $NIX_VOLUME_USE_DISK already has a '$NIX_VOLUME_LABEL' volume, but the
 installer is configured to create a new one.
 
@@ -422,6 +426,7 @@ set 'NIX_VOLUME_CREATE=0'.
 
 Here are the details of the Nix volume:
 $(diskutil info "$NIX_VOLUME_LABEL")
+
 EOF
     if password_confirm "delete this volume$and_keychain"; then
         if [ -n "$and_keychain" ]; then
