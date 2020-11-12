@@ -215,19 +215,21 @@ The installer added $1 (a LaunchDaemon
 to $3).
 EOF
     if ui_confirm "Can I remove it?"; then
-        if ! _sudo "to terminate the daemon" \
-            launchctl bootout "system/$1" 2> >(_eat_bootout_err); then
-            # this can "fail" with a message like:
-            # Boot-out failed: 36: Operation now in progress
-            # I gather it still works, but let's test
-            # launchctl blame will *fail* if it has been removed
-            if ! _sudo "to confirm its removal" \
-                launchctl blame "system/$1" 2>/dev/null; then
-                failure "error: failed to unload LaunchDaemon system/$1"
-            fi
-            # if already removed, this returned 113 and emitted roughly:
-            # Could not find service "$1" in domain for system
-        fi
+        _sudo "to terminate the daemon" \
+            launchctl bootout "system/$1" 2> >(_eat_bootout_err) || true
+        # if ! _sudo "to terminate the daemon" \
+        #     launchctl bootout "system/$1" 2> >(_eat_bootout_err); then
+        #     # this can "fail" with a message like:
+        #     # Boot-out failed: 36: Operation now in progress
+        #     # I gather it still works, but let's test
+        #     # launchctl blame will *fail* if it has been removed
+        #     if ! _sudo "to confirm its removal" \
+        #         launchctl blame "system/$1" 2>/dev/null; then
+        #         failure "error: failed to unload LaunchDaemon system/$1"
+        #     fi
+        #     # if already removed, this returned 113 and emitted roughly:
+        #     # Could not find service "$1" in domain for system
+        # fi
         _sudo "to remove the daemon definition" rm "$2"
     fi
 }
@@ -435,7 +437,7 @@ EOF
         fi
         diskID="$(volume_special_device "$NIX_VOLUME_LABEL")"
         _sudo "to unmount the Nix volume" \
-            diskutil unmount force "$diskID"
+            diskutil unmount force "$diskID" || true # may not be mounted
         _sudo "to delete the Nix volume" \
             diskutil apfs deleteVolume "$diskID"
     else
