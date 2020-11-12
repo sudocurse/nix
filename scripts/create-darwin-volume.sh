@@ -90,9 +90,6 @@ volume_special_device(){
 find_nix_volume() {
     /usr/sbin/diskutil apfs list -plist "$1" | xmllint --xpath "(/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[text()='$NIX_VOLUME_LABEL'])[1]" - &>/dev/null
 }
-find_nix_volume_label() {
-    /usr/sbin/diskutil apfs list -plist "$1" | xmllint --xpath "(/plist/dict/array/dict/key[text()='Volumes']/following-sibling::array/dict/key[text()='Name']/following-sibling::string[starts-with(translate(text(),'N','n'),'nix')]/text())[1]" - 2>/dev/null || true
-}
 
 test_fstab() {
     /usr/bin/grep -q "$NIX_ROOT apfs rw" /etc/fstab 2>/dev/null
