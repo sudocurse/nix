@@ -78,7 +78,7 @@ poly_configure_nix_daemon_service() {
           launchctl load /Library/LaunchDaemons/org.nixos.nix-daemon.plist
 
     _sudo "to start the nix-daemon" \
-          launchctl start org.nixos.nix-daemon
+          launchctl kickstart -k org.nixos.nix-daemon
 }
 
 poly_group_exists() {
