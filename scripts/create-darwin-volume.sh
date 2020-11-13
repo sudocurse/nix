@@ -155,9 +155,9 @@ test_filevault_in_use() {
 
 generate_mount_command() {
     if [ "${1-}" = "" ]; then
-        printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -s '$1' -w | /usr/sbin/diskutil apfs unlockVolume '$NIX_VOLUME_LABEL' -mountpoint $NIX_ROOT -stdinpassphrase"
-    else
         printf "    <string>%s</string>\n" /usr/sbin/diskutil mount -mountPoint "$NIX_ROOT" "$NIX_VOLUME_LABEL"
+    else
+        printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -s '$1' -w | /usr/sbin/diskutil apfs unlockVolume '$NIX_VOLUME_LABEL' -mountpoint $NIX_ROOT -stdinpassphrase"
     fi
 }
 
