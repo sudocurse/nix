@@ -47,18 +47,28 @@ case "$(uname -s)" in
     *)
         INSTALL_MODE=no-daemon;;
 esac
-ACTION="install"
+
+# space-separated string
+ACTIONS=
+
 # handle the command line flags
 while [ $# -gt 0 ]; do
     case $1 in
         --daemon)
-            INSTALL_MODE=daemon;;
+            INSTALL_MODE=daemon
+            ACTIONS="${ACTIONS}install "
+            ;;
         --no-daemon)
             if [ "$(uname -s)" = "Darwin" ]; then
-                printf '\e[1;31mError: --no-daemon installs are no-longer supported on Darwin/macOS!\e[0m\n'
+                printf '\e[1;31mError: --no-daemon installs are no-longer supported on Darwin/macOS!\e[0m\n' >&2
                 exit 1
             fi
-            INSTALL_MODE=no-daemon;;
+            INSTALL_MODE=no-daemon
+            ACTIONS="${ACTIONS}install "
+            ;;
+        # --uninstall)
+        #     ACTIONS="${ACTIONS}uninstall "
+        #     ;;
         --no-channel-add)
             export NIX_INSTALLER_NO_CHANNEL_ADD=1;;
         --daemon-user-count)
@@ -113,7 +123,7 @@ done
 
 if [ "$INSTALL_MODE" = "daemon" ]; then
     printf '\e[1;31mSwitching to the Multi-user Installer\e[0m\n'
-    exec "$self/install-multi-user" "$ACTION"
+    exec "$self/install-multi-user" $ACTIONS # let ACTIONS split
     exit 0
 fi
 
