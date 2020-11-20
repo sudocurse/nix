@@ -26,6 +26,12 @@ test_nix_daemon_installed() {
   test -e "$NIX_DAEMON_DEST"
 }
 
+poly_cure_artifacts() {
+    if should_create_volume; then
+        cure_volumes
+    fi
+}
+
 poly_validate_assumptions() {
     if [ "$(uname -s)" != "Darwin" ]; then
         failure "This script is for use with macOS!"

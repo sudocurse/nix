@@ -104,6 +104,8 @@ $step. Delete the files Nix added to your system:
 and that is it.
 
 EOF
+# TODO: rm temp note:
+# sudo rm -rf /etc/nix /nix /var/root/.nix-profile /var/root/.nix-defexpr /var/root/.nix-channels /Users/runner/.nix-profile /Users/runner/.nix-defexpr /Users/runner/.nix-channels
 
 }
 
@@ -325,6 +327,14 @@ EOF
     finish_cleanup
 }
 
+remove_nix_artifacts() {
+    failure "Not implemented yet"
+}
+
+cure_artifacts() {
+    poly_cure_artifacts
+    # remove_nix_artifacts (LATER)
+}
 
 validate_starting_assumptions() {
     poly_validate_assumptions
@@ -739,6 +749,11 @@ main() {
     welcome_to_nix
     chat_about_sudo
 
+    # TODO: there's a tension between cure and validate
+    # some bits of validate can be run before cure, but
+    # cure is intended to subsume some things validate
+    # checks (eventually). Not sure how to resolve yet.
+    cure_artifacts
     validate_starting_assumptions
 
     setup_report
