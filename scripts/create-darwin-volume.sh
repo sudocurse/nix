@@ -32,7 +32,7 @@ fi
 
 # make it easy to play w/ 'Case-sensitive APFS'
 readonly NIX_VOLUME_FS="${NIX_VOLUME_FS:-APFS}"
-readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix}"
+readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix Store}"
 # shellcheck disable=SC1003,SC2026
 readonly NIX_VOLUME_FOR_FSTAB="${NIX_VOLUME_LABEL/ /'\\\'040}" # pre-escaped
 readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemons/org.nixos.darwin-store.plist}"
@@ -556,9 +556,8 @@ synthetic_conf_uninstall_directions() {
 
 synthetic_conf_uninstall_prompt() {
     cat <<EOF
-During install, I add '${NIX_ROOT:1}' to /etc/synthetic.conf, which
-instructs macOS to create an empty root directory where I can mount
-the Nix volume.
+During install, I add '${NIX_ROOT:1}' to /etc/synthetic.conf, which instructs
+macOS to create an empty root directory for mounting the Nix volume.
 EOF
     # there are a few things we can do here
     # 1. if grep -v didn't match anything (also, if there's no diff), we know this is moot
