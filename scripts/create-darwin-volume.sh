@@ -299,38 +299,38 @@ cure_volumes() {
             # some reminders?
             # TODO: if ! headless, chance to delete?
         fi
-    done < <(volumes_labeled "$1")
+    done < <(volumes_labeled "$NIX_VOLUME_LABEL")
 
-    test -n "$found" # return true if we found a volume?
+    # test -n "$found" # return true if we found a volume?
 }
 
 # $1 = volume label
 # This is searching *any* disk
-volume_exists() {
-    # TODO: diskutil may not need abspath; my worry is gnu stuff
-    # cryptousers may be narrowly faster than snapshots, but they're both around 60ms
-    /usr/sbin/diskutil apfs listCryptoUsers "$1" >/dev/null
-    /usr/sbin/diskutil apfs listSnapshots "$1" >/dev/null
-    # below looks to be more like 30ms
-    # Note that it's a bit arcane;
-    # - ioreg doesn't seem to fail, at least not under conditions we care about
-    # - there's output if it's found, and no output if not
-    # - the read builtin returns 1 when it hits EOF
-    # so we try to read 1 character and assume a volume exists if true
-    # notes: I just use -n in persistence.sh, and I am picking up -d from there; test both
-    if read -r -N 1 -d '' hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
-        # volume exists
-    fi
-    if read -r -N 1 hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
-        # volume exists
-    fi
-    if read -r -n 1 -d '' hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
-        # volume exists
-    fi
-    if read -r -n 1 hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
-        # volume exists
-    fi
-}
+# volume_exists() {
+#     # TODO: diskutil may not need abspath; my worry is gnu stuff
+#     # cryptousers may be narrowly faster than snapshots, but they're both around 60ms
+#     /usr/sbin/diskutil apfs listCryptoUsers "$1" >/dev/null
+#     /usr/sbin/diskutil apfs listSnapshots "$1" >/dev/null
+#     # below looks to be more like 30ms
+#     # Note that it's a bit arcane;
+#     # - ioreg doesn't seem to fail, at least not under conditions we care about
+#     # - there's output if it's found, and no output if not
+#     # - the read builtin returns 1 when it hits EOF
+#     # so we try to read 1 character and assume a volume exists if true
+#     # notes: I just use -n in persistence.sh, and I am picking up -d from there; test both
+#     if read -r -N 1 -d '' hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
+#         # volume exists
+#     fi
+#     if read -r -N 1 hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
+#         # volume exists
+#     fi
+#     if read -r -n 1 -d '' hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
+#         # volume exists
+#     fi
+#     if read -r -n 1 hehe < <(ioreg -r -n "$NIX_VOLUME_LABEL"); then
+#         # volume exists
+#     fi
+# }
 
 # $1 = volume label
 # This is searching *any* disk
@@ -724,7 +724,7 @@ can ensure the decryption password is in your system keychain with a
 "Where" (service) field set to this volume's UUID ($2).
 EOF
             if password_confirm "delete this volume"; then
-                remove_volume
+                remove_volume "$1"
             else
                 # TODO: this is a good design case for a warn-and
                 # remind idiom...
@@ -734,6 +734,7 @@ Your Nix volume is encrypted, but I couldn't find its password. Either:
 - Ensure its decryption password is in the system keychain with a
   "Where" (service) field set to this volume's UUID ($2)
 EOF
+            fi
         fi
     elif test_filevault_in_use; then
         warning "FileVault on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
@@ -748,7 +749,6 @@ EOF
             fi
         fi
     fi
-    remove_volume_artifacts
 }
 
 remove_volume_artifacts() {
@@ -914,7 +914,8 @@ setup_fstab() {
     fi
 }
 # $1 = uuid, $2 = label
-encrypt_volume(){
+encrypt_volume() {
+    diskutil mount "$2"
     password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
     _sudo "to add your Nix volume's password to Keychain" \
         /usr/bin/security -i <<EOF
@@ -955,7 +956,8 @@ setup_volume() {
     # 5) If we ever get users griping about not having space to do
     # anything useful with Nix, it is possibly to specify
     # `-reserve 10g` or something, which will fail w/o that much
-    new_uuid="$(/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$new_special")"
+    # For reasons I won't pretend to fathom, this returns 253 when it works
+    new_uuid="$(/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$new_special")" || true
     # TODO: new_uuid="$(volume_uuid "$NIX_VOLUME_LABEL")"
 
     setup_fstab "$new_uuid"
@@ -990,8 +992,11 @@ EOF
         # TODO: should probably alert the user if this is disabled?
         # TODO: confirm this runs the service; if not we may want to
         # kickstart it
-        _sudo "to launch the Nix volume mounter" \
-            /bin/launchctl bootstrap system "$NIX_VOLUME_MOUNTD_DEST"
+        if ! _sudo "to launch the Nix volume mounter" \
+            launchctl bootstrap system "$NIX_VOLUME_MOUNTD_DEST"; then
+            _sudo "to launch the Nix volume mounter" \
+                launchctl kickstart -k system/org.nixos.darwin-store
+        fi
     fi
 }
 
