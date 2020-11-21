@@ -398,8 +398,6 @@ test_keychain_by_uuid() {
 }
 
 get_volume_pass() {
-    sudo security find-generic-password -s "$(cache volume_uuid "$NIX_VOLUME_LABEL")" -w
-    # TODO: maybe
     sudo security find-generic-password -s "$1" -w
 }
 
@@ -922,6 +920,7 @@ add-generic-password -a "$2" -s "$1" -l "$2 encryption password" -D "Encrypted v
 EOF
     builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
         diskutil apfs encryptVolume "$2" -user disk -stdinpassphrase
+    diskutil unmount "$2" # TODO: force? sudo?
 }
 setup_volume() {
     task "Creating a Nix volume" >&2
