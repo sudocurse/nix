@@ -28,7 +28,9 @@ test_nix_daemon_installed() {
 
 poly_cure_artifacts() {
     if should_create_volume; then
+        task "Fixing any leftover Nix volume state"
         cure_volumes
+        remove_volume_artifacts
     fi
 }
 
@@ -37,12 +39,13 @@ poly_validate_assumptions() {
         failure "This script is for use with macOS!"
     fi
 
-    if should_create_volume; then
-        # TODO: tentatively trying out a "curing" approach
-        task "Fixing any leftover Nix volume state"
-        darwin_volume_uninstall_prompts
-        # darwin_volume_validate_assumptions
-    fi
+    # if should_create_volume; then
+    #     # TODO: tentatively trying out a "curing" approach
+    #     task "Fixing any leftover Nix volume state"
+    #     # TODO: cut to test
+    #     # darwin_volume_uninstall_prompts
+    #     # darwin_volume_validate_assumptions
+    # fi
 }
 
 poly_service_installed_check() {
@@ -125,6 +128,7 @@ poly_user_home_get() {
 }
 
 poly_user_home_set() {
+    # TODO: this triggers a permission prompt now: "Terminal" would like to administer your computer. Administration can include modifying passwords, networking, and system settings.
     _sudo "in order to give $1 a safe home directory" \
           /usr/bin/dscl . -create "/Users/$1" "NFSHomeDirectory" "$2"
 }
