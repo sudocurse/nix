@@ -339,7 +339,7 @@ cure_volumes() {
 #     cache volume_info "$1" | volinfo_filevault
 # }
 volume_encrypted() {
-    diskutil apfs listCryptoUsers "$1" | /usr/bin/grep -q "No cryptographic users for $1"
+    diskutil apfs listCryptoUsers "$1" | /usr/bin/grep -q "Cryptographic users for $1 ([0-9]* found)"
 }
 # TODO: unused
 volinfo_filevault() {
