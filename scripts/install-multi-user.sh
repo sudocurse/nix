@@ -274,7 +274,7 @@ _sudo() {
     local expl="$1"
     shift
     if ! headless; then
-        __sudo "$expl" "$*"
+        __sudo "$expl" "$*" >&2
     fi
     sudo "$@"
 }
