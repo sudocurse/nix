@@ -33,15 +33,31 @@ fi
 # make it easy to play w/ 'Case-sensitive APFS'
 readonly NIX_VOLUME_FS="${NIX_VOLUME_FS:-APFS}"
 readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix Store}"
+NIX_VOLUME_USE_SPECIAL="${NIX_VOLUME_USE_SPECIAL:-}"
+NIX_VOLUME_USE_UUID="${NIX_VOLUME_USE_UUID:-}"
 # shellcheck disable=SC1003,SC2026
 readonly NIX_VOLUME_FOR_FSTAB="${NIX_VOLUME_LABEL/ /'\\\'040}" # pre-escaped
 readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemons/org.nixos.darwin-store.plist}"
+
+if /usr/bin/fdesetup isactive >/dev/null; then
+    test_filevault_in_use() { return 0; }
+    # no readonly; we may modify if user refuses from cure_volume
+    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-1}"
+else
+    test_filevault_in_use() { return 1; }
+    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-0}"
+fi
+
+should_encrypt_volume() {
+    test_filevault_in_use && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]
+}
 
 # run something, cache stdout/status (by making a function)
 # and return future calls from the cache. This has limits;
 # (i.e., you have to cache each bit in a pipeline, not the
 # whole thing, etc.), so don't try to be too cute with it.
 cache() {
+    local cache_key_funcname out code
     printf -v cache_key_funcname "◊%s" "${@// /⦚}"
     # declare the cachefunc if it doesn't exist
     if ! declare -F $cache_key_funcname &>/dev/null; then
@@ -60,6 +76,7 @@ cache() {
 
 # not used yet, but I'm sure invalidation will eventually be an issue...
 uncache() {
+    local cache_key_funcname
     printf -v cache_key_funcname "◊%s" "${@// /⦚}"
     unset "$cache_key_funcname"
 }
@@ -71,7 +88,7 @@ root_disk_identifier() {
     # it documents intent better.
     # /usr/sbin/diskutil info -plist / | xmllint --xpath "/plist/dict/key[text()='ParentWholeDisk']/following-sibling::string[1]/text()" -
     #
-    special_device="$(/usr/bin/stat -f "%Sd" /)"
+    local special_device="$(/usr/bin/stat -f "%Sd" /)"
     echo "${special_device/s[0-9]*/}"
 }
 
@@ -267,40 +284,77 @@ volumes_labeled() {
   <xsl:template match="dict">
     <xsl:apply-templates match="string" select="key[text()='BSD Name']/following-sibling::*[1]"/>
     <xsl:text>◊</xsl:text>
-    <xsl:apply-templates match="string" select="key[text()='IORegistryEntryName']/following-sibling::*[1]"/>
-    <xsl:text>◊</xsl:text>
     <xsl:apply-templates match="string" select="key[text()='UUID']/following-sibling::*[1]"/>
     <xsl:text>&#xA;</xsl:text>
   </xsl:template>
 </xsl:stylesheet>
 EOF
+    # I cut label out of the extracted values, but here it is for reference:
+    # <xsl:apply-templates match="string" select="key[text()='IORegistryEntryName']/following-sibling::*[1]"/>
+    # <xsl:text>◊</xsl:text>
+}
+
+# $1 = volume special (i.e., disk1s7)
+right_disk() {
+    [ "${1::${#NIX_VOLUME_USE_DISK}}" = "$NIX_VOLUME_USE_DISK" ]
+}
+# $1 = volume special (i.e., disk1s7)
+right_volume() {
+    # if set, it must match; otherwise ensure it's on the right disk
+    if [ -z "$NIX_VOLUME_USE_SPECIAL" ]; then
+        if right_disk "$1"; then
+            NIX_VOLUME_USE_SPECIAL="$1" # latch on
+            return 0
+        else
+            return 1
+        fi
+    else
+        [ "$1" = "$NIX_VOLUME_USE_SPECIAL" ]
+    fi
+}
+# $1 = volume uuid
+right_uuid() {
+    # if set, it must match; otherwise allow
+    if [ -z "$NIX_VOLUME_USE_UUID" ]; then
+        NIX_VOLUME_USE_UUID="$1" # latch on
+        return 0
+    else
+        [ "$1" = "$NIX_VOLUME_USE_UUID" ]
+    fi
 }
 
 # $1 = label
 cure_volumes() {
-    # DOING: starting to think the way this actually works is that *this* is the outer loop, and that it invokes the correct inner functions with these values...
-    local found="" special label uuid
+    local found="" volume special uuid
     # loop just in case they have more than one volume
     # (nothing stops you from doing this)
-    while IFS=◊ read -r special label uuid; do
+    for volume in $(volumes_labeled "$NIX_VOLUME_LABEL"); do
+        IFS=◊ read -r special uuid <<< "$volume"
         # take the first one that's on the right disk
         if [ -z "$found" ]; then
-            if [ "${special::${#NIX_VOLUME_USE_DISK}}" = "$NIX_VOLUME_USE_DISK" ]; then
+            if right_volume "$special" && right_uuid "$uuid"; then
                 cure_volume "$special" "$uuid"
                 found="${special} (${uuid})"
             else
-                warning "Ignoring ${special} (${uuid}) because it isn't on $NIX_VOLUME_USE_DISK"
+                warning <<EOF
+Ignoring ${special} (${uuid}) because I am looking for:
+disk=${NIX_VOLUME_USE_DISK} special=${NIX_VOLUME_USE_SPECIAL:-${NIX_VOLUME_USE_DISK}sX} uuid=${NIX_VOLUME_USE_UUID:-any}
+EOF
                 # TODO: if ! headless, chance to delete?
             fi
         else
-            warning "Ignoring ${special} (${uuid}), already found target: $found"
+            warning <<EOF
+Ignoring ${special} (${uuid}), already found target: $found
+EOF
             # TODO reminder? I feel like I want one
             # idiom that reminds some warnings, or warns
             # some reminders?
             # TODO: if ! headless, chance to delete?
         fi
-    done < <(volumes_labeled "$NIX_VOLUME_LABEL")
-
+    done
+    if [ -z "$found" ]; then
+        readonly NIX_VOLUME_USE_SPECIAL NIX_VOLUME_USE_UUID
+    fi
     # test -n "$found" # return true if we found a volume?
 }
 
@@ -338,8 +392,13 @@ cure_volumes() {
 # volume_encrypted() {
 #     cache volume_info "$1" | volinfo_filevault
 # }
+# $1 = special
 volume_encrypted() {
-    diskutil apfs listCryptoUsers "$1" | /usr/bin/grep -q "Cryptographic users for $1 ([0-9]* found)"
+    # Trying to match the first line of output; known first lines:
+    # No cryptographic users for <special>
+    # Cryptographic user for <special> (1 found)
+    # Cryptographic users for <special> (2 found)
+    diskutil apfs listCryptoUsers "$1" | /usr/bin/grep -q "Cryptographic users* for $1 ([0-9]* found)"
 }
 # TODO: unused
 volinfo_filevault() {
@@ -397,8 +456,11 @@ test_keychain_by_uuid() {
     security find-generic-password -s "$1" &>/dev/null
 }
 
+# $1 = uuid
 get_volume_pass() {
-    sudo security find-generic-password -s "$1" -w
+    _sudo \
+        "to confirm keychain has a password that unlocks this volume" \
+        security find-generic-password -s "$1" -w
 }
 
 # $1 = special device, $2 = uuid?
@@ -410,7 +472,7 @@ verify_volume_pass() {
 # TODO: leaving it as-is for now, but I think we
 # can get both from the special device or the uuid
 volume_pass_works() {
-    get_volume_pass "$1" | verify_volume_pass "$1" "$2"
+    get_volume_pass "$2" | verify_volume_pass "$1" "$2"
 }
 
 # Create the paths defined in synthetic.conf, saving us a reboot.
@@ -434,12 +496,6 @@ test_nix() {
 test_voldaemon() {
     test -f "$NIX_VOLUME_MOUNTD_DEST"
 }
-
-if /usr/bin/fdesetup isactive >/dev/null; then
-    test_filevault_in_use() { return 0; }
-else
-    test_filevault_in_use() { return 1; }
-fi
 
 # $1 == encrypted|unencrypted, $2 == uuid
 generate_mount_command() {
@@ -504,8 +560,7 @@ _eat_bootout_err() {
 uninstall_launch_daemon_prompt() {
     cat <<EOF
 
-The installer added $1 (a LaunchDaemon
-to $3).
+The installer adds a LaunchDaemon to $3: $1
 EOF
     if ui_confirm "Can I remove it?"; then
         _sudo "to terminate the daemon" \
@@ -583,7 +638,7 @@ EOF
 }
 
 add_nix_vol_fstab_line() {
-    uuid="$1"
+    local uuid="$1"
     shift
     EDITOR="/usr/bin/ex" _sudo "to add nix to fstab" "$@" <<EOF
 :a
@@ -682,6 +737,10 @@ remove_volume() {
 # *and* update older darwin volumes
 # $1 = special $2 = uuid
 cure_volume() {
+    header "Found existing Nix volume"
+    row "  special" "$1"
+    row "     uuid" "$2"
+
     # TODO: cut below once settled
     # math out runtime of paths through these conditionals
     # 1 diskutil (7-357ms) (if we've cached diskinfo - if not)
@@ -701,8 +760,11 @@ cure_volume() {
     #   320-400 if encrypted and cred
     #   maybe 260-340 if keychain steps combine
     if volume_encrypted "$1"; then
+        row "encrypted" "yes"
         if volume_pass_works "$1" "$2"; then
-            :
+            NIX_VOLUME_DO_ENCRYPT=0
+            ok "Found a working decryption password in keychain :)"
+            echo ""
         else
             # - this is a volume we made, and
             #   - the user encrypted it on their own
@@ -714,11 +776,13 @@ cure_volume() {
             # and prompt them to either delete the volume
             # (requiring a sudo auth), or abort to fix
             warning <<EOF
+
 This volume is encrypted, but I don't see a password to decrypt it.
 The quick fix is to let me delete this volume and make you a new one.
 If that's okay, enter your (sudo) password to continue. If not, you
 can ensure the decryption password is in your system keychain with a
-"Where" (service) field set to this volume's UUID ($2).
+"Where" (service) field set to this volume's UUID:
+  $2
 EOF
             if password_confirm "delete this volume"; then
                 remove_volume "$1"
@@ -729,20 +793,25 @@ EOF
 Your Nix volume is encrypted, but I couldn't find its password. Either:
 - Delete or rename the volume out of the way
 - Ensure its decryption password is in the system keychain with a
-  "Where" (service) field set to this volume's UUID ($2)
+  "Where" (service) field set to this volume's UUID:
+    $2
 EOF
             fi
         fi
     elif test_filevault_in_use; then
-        warning "FileVault on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
+        row "encrypted" "no"
+        warning <<EOF
+FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted.
+EOF
         # if we're interactive, give them a chance to
         # encrypt the volume. If not, /shrug
-        if ! headless; then
+        if ! headless && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]; then
             # TODO: not actually sure if this headless check is here or in a UI/X idiom
             if ui_confirm "Should I encrypt it and add the decryption key to your keychain?"; then
                 encrypt_volume "$2" "$NIX_VOLUME_LABEL"
             else
-                reminder "FileVault on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
+                NIX_VOLUME_DO_ENCRYPT=0
+                reminder "FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
             fi
         fi
     fi
@@ -826,7 +895,7 @@ EOF
 # TODO: this needs a full vet now
 # TODO: unused
 volume_uninstall_prompt() {
-    and_keychain=""
+    local and_keychain=""
     # TODO: below needs UUID fed
     if test_keychain_by_uuid; then
         and_keychain=" (and its encryption key)"
@@ -850,7 +919,7 @@ EOF
                 security delete-generic-password -s "$(volume_uuid "$NIX_VOLUME_LABEL")"
         fi
         # TODO: probably better ways to do diskID here now
-        diskID="$(cache volume_special_device "$NIX_VOLUME_LABEL")"
+        local diskID="$(cache volume_special_device "$NIX_VOLUME_LABEL")"
         remove_volume "$diskID"
     else
         if [ -n "$and_keychain" ]; then
@@ -912,26 +981,21 @@ setup_fstab() {
 }
 # $1 = uuid, $2 = label
 encrypt_volume() {
+    # TODO: mount/unmount is a late addition to support the right order
+    # of operations for creating the volume and then baking its uuid into
+    # other artifacts; not really sure if we need to do things like force,
+    # sudo, handle errors, handle race conditions, etc.
     diskutil mount "$2"
-    password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
+    local password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
     _sudo "to add your Nix volume's password to Keychain" \
         /usr/bin/security -i <<EOF
 add-generic-password -a "$2" -s "$1" -l "$2 encryption password" -D "Encrypted volume password" -j "Added automatically by the Nix installer for use by $NIX_VOLUME_MOUNTD_DEST" -w "$password" -T /System/Library/CoreServices/APFSUserAgent -T /System/Library/CoreServices/CSUserAgent -T /usr/bin/security "/Library/Keychains/System.keychain"
 EOF
     builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
         diskutil apfs encryptVolume "$2" -user disk -stdinpassphrase
-    diskutil unmount "$2" # TODO: force? sudo?
+    diskutil unmount force "$2"
 }
-setup_volume() {
-    task "Creating a Nix volume" >&2
-    # DOING: I'm tempted to wrap this call in a grep to get the new disk special without doing anything too complex, but this sudo wrapper *is* a little complex, so it'll be a PITA unless maybe we can skip sudo on this. Let's just try it without.
-    # Note: below may be fragile, but getting it from output here to
-    # - save time over running slow diskutil commands
-    # - skirt risk we grab wrong volume if multiple match
-    new_special="$(/usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | awk '/Created new APFS Volume/ {print $5}')"
-    # TODO: clean/update below
-    # _sudo "to create the Nix volume" \
-    #     /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount
+create_volume() {
     # Notes:
     # 1) using `-nomount` instead of `-mountpoint "$NIX_ROOT"` so to get
     # its UUID and set mount opts in fstab before first mount
@@ -954,26 +1018,81 @@ setup_volume() {
     # 5) If we ever get users griping about not having space to do
     # anything useful with Nix, it is possibly to specify
     # `-reserve 10g` or something, which will fail w/o that much
+    #
+    # 6) getting special w/ awk may be fragile, but doing it to:
+    #    - save time over running slow diskutil commands
+    #    - skirt risk we grab wrong volume if multiple match
+    diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
+}
+# $1 = volume special
+volume_uuid_from_special() {
     # For reasons I won't pretend to fathom, this returns 253 when it works
-    new_uuid="$(/System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$new_special")" || true
-    # TODO: new_uuid="$(volume_uuid "$NIX_VOLUME_LABEL")"
+    /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$1" || true
+}
+setup_volume() {
+    local use_special use_uuid
+    task "Creating a Nix volume" >&2
+    # DOING: I'm tempted to wrap this call in a grep to get the new disk special without doing anything too complex, but this sudo wrapper *is* a little complex, so it'll be a PITA unless maybe we can skip sudo on this. Let's just try it without.
 
-    setup_fstab "$new_uuid"
+    use_special="${NIX_VOLUME_USE_SPECIAL:-$(create_volume)}"
 
-    if test_filevault_in_use; then
-        encrypt_volume "$new_uuid" "$NIX_VOLUME_LABEL"
-        setup_volume_daemon "encrypted" "$new_uuid"
+    use_uuid=${NIX_VOLUME_USE_UUID:-$(volume_uuid_from_special "$use_special")}
+
+    setup_fstab "$use_uuid"
+
+    if should_encrypt_volume; then
+        encrypt_volume "$use_uuid" "$NIX_VOLUME_LABEL"
+        setup_volume_daemon "encrypted" "$use_uuid"
+    # TODO: might be able to save ~60ms by caching or setting
+    # this somewhere rather than re-checking here.
+    elif volume_encrypted "$use_special"; then
+        setup_volume_daemon "encrypted" "$use_uuid"
     else
-        setup_volume_daemon "unencrypted" "$new_uuid"
+        setup_volume_daemon "unencrypted" "$use_uuid"
     fi
     # TODO: Loading the daemon will hopefully mount, but we'll make sure it
     # squeaks if not, and remove once we feel good.
     if ! _TODO_temp_test_mounted; then
         failure "Volume not mounted after voldaemon setup"
+    else
+        # TODO: below is a vague kludge for now; I just don't know
+        # what if any safe action there is to take here. Also, the
+        # reminder isn't very helpful.
+        # I'm less sure where this belongs, but it also wants mounted, pre-install
+        if type -p nix-env; then
+            local profile_packages="$(nix-env --query --installed)"
+            # TODO: can probably do below faster w/ read
+            if ! [ $(printf "$profile_packages" | wc -l) = 0 ]; then
+                reminder <<EOF
+Nix now supports only multi-user installs on Darwin/macOS, and your user's
+Nix profile has some packages in it. These packages may obscure those in the
+default profile, including the Nix this installer will add. You should
+review these packages:
+$profile_packages
+
+EOF
+            fi
+        fi
+        # This is a bit of a goldilocks zone for taking ownership
+        # if there are already files on the volume; the volume is
+        # now mounted, but we haven't added a bunch of new files
+        # TODO after fiddling around timing this, use proper _sudo here
+        time sudo chown -R "root:$NIX_BUILD_GROUP_NAME" "$NIX_ROOT" || true
+        time sudo chmod 1777 $NIX_ROOT/var/nix/profiles/per-user || true
+        time sudo chown -R $USER:staff $NIX_ROOT/var/nix/profiles/per-user/$USER || true
+        time sudo chown -R $USER:staff $NIX_ROOT/var/nix/gcroots/per-user/$USER || true
     fi
 }
 _TODO_temp_test_mounted() {
-    diskutil info "$NIX_ROOT" | grep "Mounted:                   Yes"
+    for try in {1..20}; do
+        if diskutil info "$NIX_ROOT" &>/dev/null; then
+            echo "$NIX_ROOT successfully mounted by check $try"
+            return 0
+        else
+            echo "$NIX_ROOT not mounted at check $try"
+            sleep 1
+        fi
+    done
 }
 
 # $1 == encrypted|unencrypted, $2 == uuid
@@ -990,11 +1109,10 @@ EOF
         # TODO: should probably alert the user if this is disabled?
         # TODO: confirm this runs the service; if not we may want to
         # kickstart it
-        if ! _sudo "to launch the Nix volume mounter" \
-            launchctl bootstrap system "$NIX_VOLUME_MOUNTD_DEST"; then
-            _sudo "to launch the Nix volume mounter" \
-                launchctl kickstart -k system/org.nixos.darwin-store
-        fi
+        _sudo "to launch the Nix volume mounter" \
+            launchctl bootstrap system "$NIX_VOLUME_MOUNTD_DEST" || true
+        _sudo "to launch the Nix volume mounter" \
+            launchctl kickstart -k system/org.nixos.darwin-store
     fi
 }
 

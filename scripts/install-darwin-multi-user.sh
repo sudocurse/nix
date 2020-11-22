@@ -6,6 +6,7 @@ set -o pipefail
 readonly NIX_DAEMON_DEST=/Library/LaunchDaemons/org.nixos.nix-daemon.plist
 # create by default; set 0 to DIY, use a symlink, etc.
 readonly NIX_VOLUME_CREATE=${NIX_VOLUME_CREATE:-1} # now default
+# TODO: may be a faster way to get this; takes ~330ms for me
 readonly root_writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
 
 if [ "$root_writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
@@ -29,6 +30,11 @@ test_nix_daemon_installed() {
 poly_cure_artifacts() {
     if should_create_volume; then
         task "Fixing any leftover Nix volume state"
+        cat <<EOF
+Before I try to install, I'll check for any existing Nix volume config
+and ask for your permission to remove it (so that the installer can
+start fresh). I'll also ask for permission to fix any issues I spot.
+EOF
         cure_volumes
         remove_volume_artifacts
     fi
