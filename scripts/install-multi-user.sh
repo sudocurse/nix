@@ -104,9 +104,6 @@ $step. Delete the files Nix added to your system:
 and that is it.
 
 EOF
-# TODO: rm temp note:
-# sudo rm -rf /etc/nix /nix /var/root/.nix-profile /var/root/.nix-defexpr /var/root/.nix-channels /Users/runner/.nix-profile /Users/runner/.nix-defexpr /Users/runner/.nix-channels
-
 }
 
 nix_user_for_core() {
@@ -208,6 +205,7 @@ ui_confirm() {
 _SERIOUS_BUSINESS="${RED}%s:${ESC} "
 password_confirm() {
     if ui_confirm "Can I $1?"; then
+        # shellcheck disable=SC2059
         sudo -kv --prompt="$(printf "${_SERIOUS_BUSINESS}" "Enter your password to $1")"
     fi
 }
@@ -527,7 +525,6 @@ place_channel_configuration() {
     fi
 }
 
-# TODO: figure out how to work new darwin step in here :(
 welcome_to_nix() {
     ok "Welcome to the Multi-User Nix Installation"
 
@@ -747,11 +744,11 @@ main() {
     welcome_to_nix
     chat_about_sudo
 
-    # TODO: there's a tension between cure and validate
-    # some bits of validate can be run before cure, but
-    # cure is intended to subsume some things validate
-    # checks (eventually). Not sure how to resolve yet.
     cure_artifacts
+    # TODO: there's a tension between cure and validate. I moved the
+    # the sudo/root check out of validate to the head of this func.
+    # Cure is *intended* to subsume the validate-and-abort approach,
+    # so it may eventually obsolete it.
     validate_starting_assumptions
 
     setup_report
