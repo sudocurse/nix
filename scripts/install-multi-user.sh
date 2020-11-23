@@ -748,6 +748,17 @@ EOF
 }
 
 main() {
+    # TODO: I've moved this out of validate_starting_assumptions so we
+    # can fail faster in this case. Sourcing install-darwin... now runs
+    # `touch /` to detect Read-only root, but it could update times on
+    # pre-Catalina macOS if run as root user.
+    if [ $EUID -eq 0 ]; then
+        failure <<EOF
+Please do not run this script with root privileges. We will call sudo
+when we need to.
+EOF
+    fi
+
     if [ "$(uname -s)" = "Darwin" ]; then
         # shellcheck source=./install-darwin-multi-user.sh
         . "$EXTRACTED_NIX_PATH/install-darwin-multi-user.sh"

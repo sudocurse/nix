@@ -6,10 +6,22 @@ set -o pipefail
 readonly NIX_DAEMON_DEST=/Library/LaunchDaemons/org.nixos.nix-daemon.plist
 # create by default; set 0 to DIY, use a symlink, etc.
 readonly NIX_VOLUME_CREATE=${NIX_VOLUME_CREATE:-1} # now default
-# TODO: may be a faster way to get this; takes ~330ms for me
-readonly root_writable="$(diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -)"
 
-if [ "$root_writable" = "false" ] && [ "$NIX_VOLUME_CREATE" = 1 ]; then
+# caution: may update times on / if not run as normal non-root user
+read_only_root() {
+    # this touch command ~should~ always produce an error for a normal
+    # as of this change I confirmed /usr/bin/touch emits:
+    # "touch: /: Read-only file system" Catalina+ and Big Sur
+    # "touch: /: Permission denied" Mojave
+    [[ "$(/usr/bin/touch / 2>&1)" = *"Read-only file system" ]]
+
+    # Avoiding the slow semantic way to get this information (~330ms vs ~8ms)
+    # unless using touch causes problems. Just in case, that approach is:
+    # diskutil info -plist / | <find the Writable or WritableVolume keys>, i.e.
+    # diskutil info -plist / | xmllint --xpath "name(/plist/dict/key[text()='Writable']/following-sibling::*[1])" -
+}
+
+if read_only_root && [ "$NIX_VOLUME_CREATE" = 1 ]; then
     should_create_volume() { return 0; }
 else
     should_create_volume() { return 1; }
