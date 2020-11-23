@@ -504,17 +504,26 @@ create_build_users() {
 create_directories() {
     # FIXME: remove all of this because it duplicates LocalStore::LocalStore().
     task "Setting up the basic directory structure"
+    if [ -d "$NIX_ROOT" ]; then
+        # if /nix already exists, take ownership
+        # This is a bit of a goldilocks zone for taking ownership
+        # if there are already files on the volume; the volume is
+        # now mounted, but we haven't added a bunch of new files
+
+        # this is probably a bit slow; I've been seeing 3.3-4s even
+        # when promptly installed over a fresh single-user install.
+        # In case anyone's aware of a shortcut.
+        _sudo "to take root ownership of existing Nix store files" \
+              chown -R "root:$NIX_BUILD_GROUP_NAME" "$NIX_ROOT" || true
+    fi
     _sudo "to make the basic directory structure of Nix (part 1)" \
-          mkdir -pv -m 0755 /nix /nix/var /nix/var/log /nix/var/log/nix /nix/var/log/nix/drvs /nix/var/nix{,/db,/gcroots,/profiles,/temproots,/userpool} /nix/var/nix/{gcroots,profiles}/per-user
+          install -dv -m 0755 /nix /nix/var /nix/var/log /nix/var/log/nix /nix/var/log/nix/drvs /nix/var/nix{,/db,/gcroots,/profiles,/temproots,/userpool} /nix/var/nix/{gcroots,profiles}/per-user
 
     _sudo "to make the basic directory structure of Nix (part 2)" \
-          mkdir -pv -m 1775 /nix/store
-
-    _sudo "to make the basic directory structure of Nix (part 3)" \
-          chgrp "$NIX_BUILD_GROUP_NAME" /nix/store
+          install -dv -g "$NIX_BUILD_GROUP_NAME" -m 1775 /nix/store
 
     _sudo "to place the default nix daemon configuration (part 1)" \
-          mkdir -pv -m 0555 /etc/nix
+          install -dv -m 0555 /etc/nix
 }
 
 place_channel_configuration() {
