@@ -132,7 +132,8 @@ poly_user_home_get() {
 }
 
 poly_user_home_set() {
-    # TODO: this triggers a permission prompt now: "Terminal" would like to administer your computer. Administration can include modifying passwords, networking, and system settings.
+    # This can trigger a permission prompt now:
+    # "Terminal" would like to administer your computer. Administration can include modifying passwords, networking, and system settings.
     _sudo "in order to give $1 a safe home directory" \
           /usr/bin/dscl . -create "/Users/$1" "NFSHomeDirectory" "$2"
 }
