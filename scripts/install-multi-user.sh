@@ -704,12 +704,20 @@ configure_shell_profile() {
     reminder "Nix won't work in active shell sessions until you restart them."
 }
 
+cert_in_store() {
+    # in a subshell
+    # - change into the cert-file dir
+    # - get the phyiscal pwd
+    # and test if this path is in the Nix store
+    [[ "$(cd -- "$(dirname "$NIX_SSL_CERT_FILE")" && exec pwd -P)" == "$NIX_ROOT/store/"* ]]
+}
+
 setup_default_profile() {
     task "Setting up the default profile"
     _sudo "to install a bootstrapping Nix in to the default profile" \
           HOME="$ROOT_HOME" "$NIX_INSTALLED_NIX/bin/nix-env" -i "$NIX_INSTALLED_NIX"
 
-    if [ -z "${NIX_SSL_CERT_FILE:-}" ] || ! [ -f "${NIX_SSL_CERT_FILE:-}" ]; then
+    if [ -z "${NIX_SSL_CERT_FILE:-}" ] || ! [ -f "${NIX_SSL_CERT_FILE:-}" ] || cert_in_store; then
         _sudo "to install a bootstrapping SSL certificate just for Nix in to the default profile" \
               HOME="$ROOT_HOME" "$NIX_INSTALLED_NIX/bin/nix-env" -i "$NIX_INSTALLED_CACERT"
         export NIX_SSL_CERT_FILE=/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt
