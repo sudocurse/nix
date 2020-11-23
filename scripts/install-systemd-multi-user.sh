@@ -45,12 +45,6 @@ poly_cure_artifacts() {
     :
 }
 
-poly_validate_assumptions() {
-    if [ "$(uname -s)" != "Linux" ]; then
-        failure "This script is for use with Linux!"
-    fi
-}
-
 poly_service_installed_check() {
     [ "$(systemctl is-enabled nix-daemon.service)" = "linked" ] \
         || [ "$(systemctl is-enabled nix-daemon.socket)" = "enabled" ]

@@ -337,8 +337,6 @@ cure_artifacts() {
 }
 
 validate_starting_assumptions() {
-    poly_validate_assumptions
-
     if [ $EUID -eq 0 ]; then
         failure <<EOF
 Please do not run this script with root privileges. We will call sudo

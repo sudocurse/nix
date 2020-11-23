@@ -40,20 +40,6 @@ EOF
     fi
 }
 
-poly_validate_assumptions() {
-    if [ "$(uname -s)" != "Darwin" ]; then
-        failure "This script is for use with macOS!"
-    fi
-
-    # if should_create_volume; then
-    #     # TODO: tentatively trying out a "curing" approach
-    #     task "Fixing any leftover Nix volume state"
-    #     # TODO: cut to test
-    #     # darwin_volume_uninstall_prompts
-    #     # darwin_volume_validate_assumptions
-    # fi
-}
-
 poly_service_installed_check() {
     if should_create_volume; then
         test_nix_daemon_installed || test_nix_volume_mountd_installed
