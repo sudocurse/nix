@@ -204,6 +204,37 @@ ui_confirm() {
     return 1
 }
 
+printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC" # "dim"
+# bold+invert+red and bold+invert+green just for the +/- below
+# red/green foreground for rest of the line
+printf -v _OLD_LINE_FMT "%b" $'\033[1;7;31m-'"$ESC ${RED}%L${ESC}"
+printf -v _NEW_LINE_FMT "%b" $'\033[1;7;32m+'"$ESC ${GREEN}%L${ESC}"
+
+_diff() {
+    # colorized diff comatible w/ pre `--color` versions
+    diff --unchanged-group-format="$_UNCHANGED_GRP_FMT" --old-line-format="$_OLD_LINE_FMT" --new-line-format="$_NEW_LINE_FMT" --unchanged-line-format="  %L" "$@"
+}
+
+confirm_rm() {
+    if ui_confirm "Can I remove $1?"; then
+        _sudo "to remove $1" rm "$1"
+    fi
+}
+
+confirm_edit() {
+    cat <<EOF
+
+It looks like Nix isn't the only thing here, but I think I know how to edit it
+out. Here's the diff:
+EOF
+
+    # could technically test the diff, but caller should do it
+    _diff "$1" "$2"
+    if ui_confirm "Does the change above look right?"; then
+        _sudo "remove nix from $1" cp "$2" "$1"
+    fi
+}
+
 _SERIOUS_BUSINESS="${RED}%s:${ESC} "
 password_confirm() {
     if ui_confirm "Can I $1?"; then
