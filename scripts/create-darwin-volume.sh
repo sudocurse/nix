@@ -10,9 +10,7 @@ else
     # declare some things we expect to inherit from install-multi-user
     # I don't love this (because it's a bit of a kludge)
     readonly NIX_ROOT="${NIX_ROOT:-/nix}"
-    readonly ESC='\033[0m'
-    readonly GREEN='\033[32m'
-    readonly RED='\033[31m'
+
     _sudo() {
         shift # throw away the 'explanation'
         /usr/bin/sudo "$@"
@@ -68,36 +66,6 @@ readonly NIX_VOLUME_USE_DISK="${NIX_VOLUME_USE_DISK:-$(root_disk_identifier)}"
 
 substep() {
     printf "   %s\n" "" "- $1" "" "${@:2}"
-}
-
-printf -v _UNCHANGED_GRP_FMT "%b" $'\033[2m%='"$ESC" # "dim"
-# bold+invert+red and bold+invert+green just for the +/- below
-# red/green foreground for rest of the line
-printf -v _OLD_LINE_FMT "%b" $'\033[1;7;31m-'"$ESC ${RED}%L${ESC}"
-printf -v _NEW_LINE_FMT "%b" $'\033[1;7;32m+'"$ESC ${GREEN}%L${ESC}"
-_diff() {
-    /usr/bin/diff --unchanged-group-format="$_UNCHANGED_GRP_FMT" --old-line-format="$_OLD_LINE_FMT" --new-line-format="$_NEW_LINE_FMT" --unchanged-line-format="  %L" "$@"
-}
-
-confirm_rm() {
-    if ui_confirm "Can I remove $1?"; then
-        # ok "Yay! Thanks! Let's get going!"
-        _sudo "to remove $1" rm "$1"
-    fi
-}
-confirm_edit() {
-    cat <<EOF
-
-It looks like Nix isn't the only thing here, but I think I know how to edit it
-out. Here's the diff:
-EOF
-
-    # could technically test the diff, but caller should do it
-    _diff "$1" "$2"
-    if ui_confirm "Does the change above look right?"; then
-        # ok "Yay! Thanks! Let's get going!"
-        _sudo "remove nix from $1" cp "$2" "$1"
-    fi
 }
 
 # $1 = label
