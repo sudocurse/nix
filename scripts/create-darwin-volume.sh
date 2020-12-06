@@ -58,14 +58,13 @@ readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemon
 if /usr/bin/fdesetup isactive >/dev/null; then
     test_filevault_in_use() { return 0; }
     # no readonly; we may modify if user refuses from cure_volume
-    let NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-1}"
+    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-1}"
 else
     test_filevault_in_use() { return 1; }
-    let NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-0}"
+    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-0}"
 fi
 
 should_encrypt_volume() {
-    test_filevault_in_use && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]
     test_filevault_in_use && (( NIX_VOLUME_DO_ENCRYPT == 1 ))
 }
 
@@ -102,8 +101,12 @@ right_disk() {
 right_volume() {
     # if set, it must match; otherwise ensure it's on the right disk
     if [ -z "$NIX_VOLUME_USE_SPECIAL" ]; then
-        right_disk "$1" \
-        && NIX_VOLUME_USE_SPECIAL="$1" # latch on
+        if right_disk "$1"; then
+            NIX_VOLUME_USE_SPECIAL="$1" # latch on
+            return 0
+        else
+            return 1
+        fi
     else
         [ "$1" = "$NIX_VOLUME_USE_SPECIAL" ]
     fi
@@ -495,7 +498,7 @@ EOF
             if ui_confirm "Should I encrypt it and add the decryption key to your keychain?"; then
                 encrypt_volume "$2" "$NIX_VOLUME_LABEL"
             else
-                let NIX_VOLUME_DO_ENCRYPT=0
+                NIX_VOLUME_DO_ENCRYPT=0
                 reminder "FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
             fi
         fi
