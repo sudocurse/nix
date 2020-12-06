@@ -127,6 +127,7 @@ cure_volumes() {
     # loop just in case they have more than one volume
     # (nothing stops you from doing this)
     for volume in $(volumes_labeled "$NIX_VOLUME_LABEL"); do
+        # shellcheck disable=SC1097
         IFS== read -r special uuid <<< "$volume"
         # take the first one that's on the right disk
         if [ -z "$found" ]; then
