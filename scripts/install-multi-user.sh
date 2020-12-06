@@ -253,10 +253,11 @@ password_confirm() {
 # reminders stored in array delimited by empty entry; if ! headless,
 # user is asked to confirm after each delimiter.
 _reminders=()
-((_remind_num=1))
+let _remind_num=1
 
 remind() {
-    if ! [ "${#_reminders}" = 0 ]; then
+    # (( arithmetic expression ))
+    if (( _remind_num > 1 )); then
         header "Reminders"
         for line in "${_reminders[@]}"; do
             echo "$line"
@@ -272,7 +273,7 @@ remind() {
 reminder() {
     printf -v label "${BLUE}[ %d ]${ESC}" "$_remind_num"
     _reminders+=("$label")
-    if [ "$*" = "" ]; then
+    if [[ "$*" = "" ]]; then
         while read -r line; do
             _reminders+=("$line")
         done
@@ -282,7 +283,8 @@ reminder() {
         _reminders+=("$@")
     fi
     _reminders+=("")
-    ((_remind_num++))
+    # using let to better distinguish from array ops here
+    let _remind_num++
 }
 
 __sudo() {
@@ -368,13 +370,6 @@ cure_artifacts() {
 }
 
 validate_starting_assumptions() {
-    if [ $EUID -eq 0 ]; then
-        failure <<EOF
-Please do not run this script with root privileges. We will call sudo
-when we need to.
-EOF
-    fi
-
     if type nix-env 2> /dev/null >&2; then
         warning <<EOF
 Nix already appears to be installed. This installer may run into issues.
@@ -845,15 +840,20 @@ EOF
     trap finish_success EXIT
 }
 
+# set an empty initial arg for bare invocations in case we need to
+# disambiguate someone directly invoking this later.
+if [ "${#@}" = 0 ]; then
+    set ""
+fi
+
 # ACTION for override
 case "${1-}" in
     # uninstall)
     #     shift
     #     uninstall "$@";;
-    ""|install|*)
-        if ! [ "${#@}" = 0 ]; then
-            shift
-        fi
-        # same as the no-arg condition for now (but, explicit)
-        main "$@";;
+    # install == same as the no-arg condition for now (but, explicit)
+    ""|install)
+        main;;
+    *) # holding space for future options (like uninstall + install?)
+        failure "install-multi-user: invalid argument";;
 esac
