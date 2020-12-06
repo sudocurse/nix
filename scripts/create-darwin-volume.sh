@@ -127,6 +127,27 @@ cure_volumes() {
     # loop just in case they have more than one volume
     # (nothing stops you from doing this)
     for volume in $(volumes_labeled "$NIX_VOLUME_LABEL"); do
+        # CAUTION: this could (maybe) be a more normal read
+        # loop like:
+        #   while IFS== read -r special uuid; do
+        #       # ...
+        #   done <<<"$(volumes_labeled "$NIX_VOLUME_LABEL")"
+        #
+        # I did it with for to skirt a problem with the obvious
+        # pattern replacing stdin and causing user prompts
+        # inside (which also use read and access stdin) to skip
+        #
+        # If there's an existing encrypted volume we can't find
+        # in keychain, the user never gets prompted to delete
+        # the volume, and the install fails.
+        #
+        # If you change this, a human needs to test a very
+        # specific scenario: you already have an encrypted
+        # Nix Store volume, and have deleted its credential
+        # from keychain. Ensure the script asks you if it can
+        # delete the volume, and then prompts for your sudo
+        # password to confirm.
+        #
         # shellcheck disable=SC1097
         IFS== read -r special uuid <<< "$volume"
         # take the first one that's on the right disk
