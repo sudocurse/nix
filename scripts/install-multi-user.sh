@@ -240,6 +240,8 @@ password_confirm() {
     if ui_confirm "Can I $1?"; then
         # shellcheck disable=SC2059
         sudo -kv --prompt="$(printf "${_SERIOUS_BUSINESS}" "Enter your password to $1")"
+    else
+        return 1
     fi
 }
 

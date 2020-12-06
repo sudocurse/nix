@@ -500,7 +500,7 @@ EOF
             else
                 # TODO: this is a good design case for a warn-and
                 # remind idiom...
-                reminder <<EOF
+                failure <<EOF
 Your Nix volume is encrypted, but I couldn't find its password. Either:
 - Delete or rename the volume out of the way
 - Ensure its decryption password is in the system keychain with a
