@@ -837,6 +837,12 @@ EOF
     trap finish_success EXIT
 }
 
+# set an empty initial arg for bare invocations in case we need to
+# disambiguate someone directly invoking this later.
+if [ "${#@}" = 0 ]; then
+    set ""
+fi
+
 # ACTION for override
 case "${1-}" in
     # uninstall)
