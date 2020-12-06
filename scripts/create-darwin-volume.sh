@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -eu
 
-# support import-only `. create-darwin-volume.sh no-main[ ...]`
+# I'm a little agnostic on the choices, but supporting a wide
+# slate of uses for now, including:
+# - import-only: `. create-darwin-volume.sh no-main[ ...]`
+# - legacy: `./create-darwin-volume.sh` or `. create-darwin-volume.sh`
+#   (both will run main())
+# - external alt-routine: `./create-darwin-volume.sh no-main func[ ...]`
 if [ "${1-}" = "no-main" ]; then
     shift
     readonly _CREATE_VOLUME_NO_MAIN=1
@@ -28,26 +33,6 @@ else
     }
 fi
 
-# make it easy to play w/ 'Case-sensitive APFS'
-readonly NIX_VOLUME_FS="${NIX_VOLUME_FS:-APFS}"
-readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix Store}"
-NIX_VOLUME_USE_SPECIAL="${NIX_VOLUME_USE_SPECIAL:-}"
-NIX_VOLUME_USE_UUID="${NIX_VOLUME_USE_UUID:-}"
-readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemons/org.nixos.darwin-store.plist}"
-
-if /usr/bin/fdesetup isactive >/dev/null; then
-    test_filevault_in_use() { return 0; }
-    # no readonly; we may modify if user refuses from cure_volume
-    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-1}"
-else
-    test_filevault_in_use() { return 1; }
-    NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-0}"
-fi
-
-should_encrypt_volume() {
-    test_filevault_in_use && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]
-}
-
 # usually "disk1"
 root_disk_identifier() {
     # For performance (~10ms vs 280ms) I'm parsing 'diskX' from stat output
@@ -57,12 +42,32 @@ root_disk_identifier() {
     #
     local special_device
     special_device="$(/usr/bin/stat -f "%Sd" /)"
-    echo "${special_device/s[0-9]*/}"
+    echo "${special_device%s[0-9]*}"
 }
 
-# Strongly assuming we'll make a volume on the device root is on
+# make it easy to play w/ 'Case-sensitive APFS'
+readonly NIX_VOLUME_FS="${NIX_VOLUME_FS:-APFS}"
+readonly NIX_VOLUME_LABEL="${NIX_VOLUME_LABEL:-Nix Store}"
+# Strongly assuming we'll make a volume on the device / is on
 # But you can override NIX_VOLUME_USE_DISK to create it on some other device
 readonly NIX_VOLUME_USE_DISK="${NIX_VOLUME_USE_DISK:-$(root_disk_identifier)}"
+NIX_VOLUME_USE_SPECIAL="${NIX_VOLUME_USE_SPECIAL:-}"
+NIX_VOLUME_USE_UUID="${NIX_VOLUME_USE_UUID:-}"
+readonly NIX_VOLUME_MOUNTD_DEST="${NIX_VOLUME_MOUNTD_DEST:-/Library/LaunchDaemons/org.nixos.darwin-store.plist}"
+
+if /usr/bin/fdesetup isactive >/dev/null; then
+    test_filevault_in_use() { return 0; }
+    # no readonly; we may modify if user refuses from cure_volume
+    let NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-1}"
+else
+    test_filevault_in_use() { return 1; }
+    let NIX_VOLUME_DO_ENCRYPT="${NIX_VOLUME_DO_ENCRYPT:-0}"
+fi
+
+should_encrypt_volume() {
+    test_filevault_in_use && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]
+    test_filevault_in_use && (( NIX_VOLUME_DO_ENCRYPT == 1 ))
+}
 
 substep() {
     printf "   %s\n" "" "- $1" "" "${@:2}"
@@ -78,7 +83,7 @@ volumes_labeled() {
   </xsl:template>
   <xsl:template match="dict">
     <xsl:apply-templates match="string" select="key[text()='BSD Name']/following-sibling::*[1]"/>
-    <xsl:text>◊</xsl:text>
+    <xsl:text>=</xsl:text>
     <xsl:apply-templates match="string" select="key[text()='UUID']/following-sibling::*[1]"/>
     <xsl:text>&#xA;</xsl:text>
   </xsl:template>
@@ -86,23 +91,19 @@ volumes_labeled() {
 EOF
     # I cut label out of the extracted values, but here it is for reference:
     # <xsl:apply-templates match="string" select="key[text()='IORegistryEntryName']/following-sibling::*[1]"/>
-    # <xsl:text>◊</xsl:text>
+    # <xsl:text>=</xsl:text>
 }
 
 # $1 = volume special (i.e., disk1s7)
 right_disk() {
-    [ "${1::${#NIX_VOLUME_USE_DISK}}" = "$NIX_VOLUME_USE_DISK" ]
+    [[ "$1" == "$NIX_VOLUME_USE_DISK"s* ]]
 }
 # $1 = volume special (i.e., disk1s7)
 right_volume() {
     # if set, it must match; otherwise ensure it's on the right disk
     if [ -z "$NIX_VOLUME_USE_SPECIAL" ]; then
-        if right_disk "$1"; then
-            NIX_VOLUME_USE_SPECIAL="$1" # latch on
-            return 0
-        else
-            return 1
-        fi
+        right_disk "$1" \
+        && NIX_VOLUME_USE_SPECIAL="$1" # latch on
     else
         [ "$1" = "$NIX_VOLUME_USE_SPECIAL" ]
     fi
@@ -118,13 +119,12 @@ right_uuid() {
     fi
 }
 
-# $1 = label
 cure_volumes() {
-    local found="" volume special uuid
+    local found volume special uuid
     # loop just in case they have more than one volume
     # (nothing stops you from doing this)
     for volume in $(volumes_labeled "$NIX_VOLUME_LABEL"); do
-        IFS=◊ read -r special uuid <<< "$volume"
+        IFS== read -r special uuid <<< "$volume"
         # take the first one that's on the right disk
         if [ -z "$found" ]; then
             if right_volume "$special" && right_uuid "$uuid"; then
@@ -491,11 +491,11 @@ FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted.
 EOF
         # if we're interactive, give them a chance to
         # encrypt the volume. If not, /shrug
-        if ! headless && [ "$NIX_VOLUME_DO_ENCRYPT" = "1" ]; then
+        if ! headless && (( NIX_VOLUME_DO_ENCRYPT == 1 )); then
             if ui_confirm "Should I encrypt it and add the decryption key to your keychain?"; then
                 encrypt_volume "$2" "$NIX_VOLUME_LABEL"
             else
-                NIX_VOLUME_DO_ENCRYPT=0
+                let NIX_VOLUME_DO_ENCRYPT=0
                 reminder "FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
             fi
         fi

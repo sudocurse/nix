@@ -7,7 +7,7 @@ $ sh <(curl -L https://nixos.org/nix/install)
 ```
 
 This will run the installer interactively (causing it to explain what
-it is doing more explicitly, and perform the default "type" of install
+it is doing more explicitly), and perform the default "type" of install
 for your platform:
 - single-user on Linux
 - multi-user on macOS
