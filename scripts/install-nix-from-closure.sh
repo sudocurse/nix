@@ -64,9 +64,11 @@ while [ $# -gt 0 ]; do
                 exit 1
             fi
             INSTALL_MODE=no-daemon
+            # intentional tail space
             ACTIONS="${ACTIONS}install "
             ;;
         # --uninstall)
+        #     # intentional tail space
         #     ACTIONS="${ACTIONS}uninstall "
         #     ;;
         --no-channel-add)
