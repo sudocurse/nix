@@ -222,8 +222,9 @@ confirm_rm() {
 confirm_edit() {
     cat <<EOF
 
-It looks like Nix isn't the only thing here, but I think I know how to edit it
-out. Here's the diff:
+Nix isn't the only thing in $1,
+but I think I know how to edit it out.
+Here's the diff:
 EOF
 
     # could technically test the diff, but caller should do it
