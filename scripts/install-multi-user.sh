@@ -253,7 +253,7 @@ password_confirm() {
 # reminders stored in array delimited by empty entry; if ! headless,
 # user is asked to confirm after each delimiter.
 _reminders=()
-let _remind_num=1
+((_remind_num=1))
 
 remind() {
     # (( arithmetic expression ))
@@ -283,8 +283,7 @@ reminder() {
         _reminders+=("$@")
     fi
     _reminders+=("")
-    # using let to better distinguish from array ops here
-    let _remind_num++
+    ((_remind_num++))
 }
 
 __sudo() {
