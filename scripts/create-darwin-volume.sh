@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -eu
+set -o pipefail
 
 # I'm a little agnostic on the choices, but supporting a wide
 # slate of uses for now, including:
@@ -13,7 +14,22 @@ if [ "${1-}" = "no-main" ]; then
 else
     readonly _CREATE_VOLUME_NO_MAIN=0
     # declare some things we expect to inherit from install-multi-user
-    # I don't love this (because it's a bit of a kludge)
+    # I don't love this (because it's a bit of a kludge).
+    #
+    # CAUTION: (Dec 19 2020)
+    # This is a stopgap. It doesn't cover the full slate of
+    # identifiers we inherit--just those necessary to:
+    # - avoid breaking direct invocations of this script (here/now)
+    # - avoid hard-to-reverse structural changes before the call to rm
+    #   single-user support is verified
+    #
+    # In the near-mid term, I (personally) think we should:
+    # - decide to deprecate the direct call and add a notice
+    # - fold all of this into install-darwin-multi-user.sh
+    # - intentionally remove the old direct-invocation form (kill the
+    #   routine, replace this script w/ deprecation notice and a note
+    #   on the remove-after date)
+    #
     readonly NIX_ROOT="${NIX_ROOT:-/nix}"
 
     _sudo() {
@@ -183,7 +199,7 @@ volume_encrypted() {
     # No cryptographic users for <special>
     # Cryptographic user for <special> (1 found)
     # Cryptographic users for <special> (2 found)
-    diskutil apfs listCryptoUsers "$1" | /usr/bin/grep -q "Cryptographic users* for $1 ([0-9]* found)"
+    diskutil apfs listCryptoUsers -plist "$1" | /usr/bin/grep -q APFSCryptoUserUUID
 }
 
 test_fstab() {
@@ -252,14 +268,20 @@ test_voldaemon() {
 
 # $1 == encrypted|unencrypted, $2 == uuid
 generate_mount_command() {
+    local uuid mountpoint cmd=()
+    printf -v uuid "%q" "$2"
+    printf -v mountpoint "%q" "$NIX_ROOT"
+
     case "${1-}" in
         encrypted)
-            printf "    <string>%s</string>\n" /bin/sh -c "/usr/bin/security find-generic-password -s '$2' -w | /usr/sbin/diskutil apfs unlockVolume '$2' -mountpoint $NIX_ROOT -stdinpassphrase";;
+            cmd=(/bin/sh -c "/usr/bin/security find-generic-password -s '$uuid' -w | /usr/sbin/diskutil apfs unlockVolume '$uuid' -mountpoint '$mountpoint' -stdinpassphrase");;
         unencrypted)
-            printf "    <string>%s</string>\n" /usr/sbin/diskutil mount -mountPoint "$NIX_ROOT" "$2";;
+            cmd=(/usr/sbin/diskutil mount -mountPoint "$mountpoint" "$uuid");;
         *)
             failure "Invalid first arg $1 to generate_mount_command";;
     esac
+
+    printf "    <string>%s</string>\n" "${cmd[@]}"
 }
 
 # $1 == encrypted|unencrypted, $2 == uuid
@@ -283,16 +305,18 @@ EOF
 }
 
 _eat_bootout_err() {
-    /usr/bin/grep -v "Boot-out failed: 36: Operation now in progress" 1>&2
+    /usr/bin/grep -v "Boot-out failed: 36: Operation now in progress"
 }
 
 # TODO: remove with --uninstall?
+# $1 == daemon label/name, $2 == plist path
 uninstall_launch_daemon_directions() {
     substep "Uninstall LaunchDaemon $1" \
       "  sudo launchctl bootout system/$1" \
       "  sudo rm $2"
 }
 
+# $1 == daemon label/name, $2 == plist path, $3 == reason added
 uninstall_launch_daemon_prompt() {
     cat <<EOF
 
@@ -300,7 +324,7 @@ The installer adds a LaunchDaemon to $3: $1
 EOF
     if ui_confirm "Can I remove it?"; then
         _sudo "to terminate the daemon" \
-            launchctl bootout "system/$1" 2> >(_eat_bootout_err) || true
+            launchctl bootout "system/$1" 2> >(_eat_bootout_err >&2) || true
             # this can "fail" with a message like:
             # Boot-out failed: 36: Operation now in progress
         _sudo "to remove the daemon definition" rm "$2"
@@ -337,7 +361,7 @@ synthetic_conf_uninstall_directions() {
     # :1 to strip leading slash
     substep "Remove ${NIX_ROOT:1} from /etc/synthetic.conf" \
         "  If nix is the only entry: sudo rm /etc/synthetic.conf" \
-        "  Otherwise: grep -v '^${NIX_ROOT:1}$' /etc/synthetic.conf | sudo dd of=/etc/synthetic.conf"
+        "  Otherwise: sudo /usr/bin/sed -i '' -e '/^${NIX_ROOT:1}$/d' /etc/synthetic.conf"
 }
 
 synthetic_conf_uninstall_prompt() {
@@ -345,24 +369,16 @@ synthetic_conf_uninstall_prompt() {
 During install, I add '${NIX_ROOT:1}' to /etc/synthetic.conf, which instructs
 macOS to create an empty root directory for mounting the Nix volume.
 EOF
-    # there are a few things we can do here
-    # 1. if grep -v didn't match anything (also, if there's no diff), we know this is moot
-    # 2. if grep -v was empty (but did match?) I think we know that we can just remove the file
-    # 3. if the edit doesn't ~empty the file, show them the diff and ask
-    if ! /usr/bin/grep -v '^'"${NIX_ROOT:1}"'$' /etc/synthetic.conf > "$SCRATCH/synthetic.conf.edit"; then
+    # make the edit to a copy
+    /usr/bin/sed -e "/^${NIX_ROOT:1}$/d" "/etc/synthetic.conf" > "$SCRATCH/synthetic.conf.edit"
+    # ask to rm if this left the file empty aside from comments, else edit
+    if /usr/bin/diff -q <(:) <(/usr/bin/grep -v "^#" "$SCRATCH/synthetic.conf.edit") &>/dev/null; then
         if confirm_rm "/etc/synthetic.conf"; then
             return 0
         fi
     else
-        if /usr/bin/cmp <<<"" "$SCRATCH/synthetic.conf.edit"; then
-            # this edit would leave it empty; propose deleting it
-            if confirm_rm "/etc/synthetic.conf"; then
-                return 0
-            fi
-        else
-            if confirm_edit "$SCRATCH/synthetic.conf.edit" "/etc/synthetic.conf"; then
-                return 0
-            fi
+        if confirm_edit "$SCRATCH/synthetic.conf.edit" "/etc/synthetic.conf"; then
+            return 0
         fi
     fi
     # fallback instructions
