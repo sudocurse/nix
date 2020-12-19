@@ -9,7 +9,7 @@ readonly NIX_VOLUME_CREATE=${NIX_VOLUME_CREATE:-1} # now default
 
 # caution: may update times on / if not run as normal non-root user
 read_only_root() {
-    # this touch command ~should~ always produce an error for a normal
+    # this touch command ~should~ always produce an error
     # as of this change I confirmed /usr/bin/touch emits:
     # "touch: /: Read-only file system" Catalina+ and Big Sur
     # "touch: /: Permission denied" Mojave
