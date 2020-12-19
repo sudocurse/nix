@@ -206,14 +206,20 @@ test_fstab() {
     /usr/bin/grep -q "$NIX_ROOT apfs rw" /etc/fstab 2>/dev/null
 }
 
-test_nix_symlink() {
-    [ -L "$NIX_ROOT" ] || /usr/bin/grep -q "^nix." /etc/synthetic.conf 2>/dev/null
+test_nix_root_is_symlink() {
+    [ -L "$NIX_ROOT" ]
 }
+
+test_synthetic_conf_either(){
+    /usr/bin/grep -qE "^${NIX_ROOT:1}($|\t.{3,}$)" /etc/synthetic.conf 2>/dev/null
+}
+
 test_synthetic_conf_mountable() {
     /usr/bin/grep -q "^${NIX_ROOT:1}$" /etc/synthetic.conf 2>/dev/null
 }
+
 test_synthetic_conf_symlinked() {
-    /usr/bin/grep -qE "^${NIX_ROOT:1}\s+\S{3,}" /etc/synthetic.conf 2>/dev/null
+    /usr/bin/grep -qE "^${NIX_ROOT:1}\t.{3,}$" /etc/synthetic.conf 2>/dev/null
 }
 
 test_nix_volume_mountd_installed() {
@@ -366,18 +372,52 @@ synthetic_conf_uninstall_directions() {
 
 synthetic_conf_uninstall_prompt() {
     cat <<EOF
+
 During install, I add '${NIX_ROOT:1}' to /etc/synthetic.conf, which instructs
 macOS to create an empty root directory for mounting the Nix volume.
 EOF
     # make the edit to a copy
-    /usr/bin/sed -e "/^${NIX_ROOT:1}$/d" "/etc/synthetic.conf" > "$SCRATCH/synthetic.conf.edit"
+    /usr/bin/grep -vE "^${NIX_ROOT:1}($|\t.{3,}$)" /etc/synthetic.conf > "$SCRATCH/synthetic.conf.edit"
+
+    if test_synthetic_conf_symlinked; then
+        warning <<EOF
+
+/etc/synthetic.conf already contains a line instructing your system
+to make '${NIX_ROOT}' as a symlink:
+    $(/usr/bin/grep -nE "^${NIX_ROOT:1}\t.{3,}$" /etc/synthetic.conf)
+
+This may mean your system has/had a non-standard Nix install.
+
+The volume-creation process in this installer is *not* compatible
+with a symlinked store, so I'll have to remove this instruction to
+continue.
+
+If you want/need to keep this instruction, answer 'n' to abort.
+
+EOF
+    fi
+
     # ask to rm if this left the file empty aside from comments, else edit
     if /usr/bin/diff -q <(:) <(/usr/bin/grep -v "^#" "$SCRATCH/synthetic.conf.edit") &>/dev/null; then
         if confirm_rm "/etc/synthetic.conf"; then
+            if test_nix_root_is_symlink; then
+                failure >&2 <<EOF
+I removed /etc/synthetic.conf, but $NIX_ROOT is already a symlink
+(-> $(readlink "$NIX_ROOT")). The system should remove it when you reboot.
+Once you've rebooted, run the installer again.
+EOF
+            fi
             return 0
         fi
     else
         if confirm_edit "$SCRATCH/synthetic.conf.edit" "/etc/synthetic.conf"; then
+            if test_nix_root_is_symlink; then
+                failure >&2 <<EOF
+I edited Nix out of /etc/synthetic.conf, but $NIX_ROOT is already a symlink
+(-> $(readlink "$NIX_ROOT")). The system should remove it when you reboot.
+Once you've rebooted, run the installer again.
+EOF
+            fi
             return 0
         fi
     fi
@@ -546,7 +586,8 @@ EOF
 }
 
 remove_volume_artifacts() {
-    if test_synthetic_conf_mountable; then
+    if test_synthetic_conf_either; then
+        # NIX_ROOT is in synthetic.conf
         if synthetic_conf_uninstall_prompt; then
             # TODO: moot until we tackle uninstall, but when we're
             # actually uninstalling, we should issue:
@@ -564,6 +605,14 @@ remove_volume_artifacts() {
 }
 
 setup_synthetic_conf() {
+    if test_nix_root_is_symlink; then
+        if ! test_synthetic_conf_symlinked; then
+            failure >&2 <<EOF
+error: $NIX_ROOT is a symlink (-> $(readlink "$NIX_ROOT")).
+Please remove it. If nix is in /etc/synthetic.conf, remove it and reboot.
+EOF
+        fi
+    fi
     if ! test_synthetic_conf_mountable; then
         task "Configuring /etc/synthetic.conf to make a mount-point at $NIX_ROOT" >&2
         # technically /etc/synthetic.d/nix is supported in Big Sur+
@@ -760,13 +809,6 @@ else
             echo "  5. Remove the 'nix' line from /etc/synthetic.conf (or the file)"
             echo ""
         } >&2
-
-        if test_nix_symlink; then
-            failure >&2 <<EOF
-error: $NIX_ROOT is a symlink (-> $(readlink "$NIX_ROOT")).
-Please remove it. If nix is in /etc/synthetic.conf, remove it and reboot.
-EOF
-        fi
 
         setup_darwin_volume
     }
