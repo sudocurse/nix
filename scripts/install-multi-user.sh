@@ -216,31 +216,35 @@ _diff() {
 }
 
 confirm_rm() {
-    if ui_confirm "Can I remove $1?"; then
-        _sudo "to remove $1" rm "$1"
+    local path="$1"
+    if ui_confirm "Can I remove $path?"; then
+        _sudo "to remove $path" rm "$path"
     fi
 }
 
 confirm_edit() {
+    local path="$1"
+    local edit_path="$2"
     cat <<EOF
 
-Nix isn't the only thing in $1,
+Nix isn't the only thing in $path,
 but I think I know how to edit it out.
 Here's the diff:
 EOF
 
     # could technically test the diff, but caller should do it
-    _diff "$1" "$2"
+    _diff "$path" "$edit_path"
     if ui_confirm "Does the change above look right?"; then
-        _sudo "remove nix from $1" cp "$2" "$1"
+        _sudo "remove nix from $path" cp "$edit_path" "$path"
     fi
 }
 
 _SERIOUS_BUSINESS="${RED}%s:${ESC} "
 password_confirm() {
-    if ui_confirm "Can I $1?"; then
+    local do_something_consequential="$1"
+    if ui_confirm "Can I $do_something_consequential?"; then
         # shellcheck disable=SC2059
-        sudo -kv --prompt="$(printf "${_SERIOUS_BUSINESS}" "Enter your password to $1")"
+        sudo -kv --prompt="$(printf "${_SERIOUS_BUSINESS}" "Enter your password to $do_something_consequential")"
     else
         return 1
     fi

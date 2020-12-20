@@ -88,9 +88,10 @@ substep() {
     printf "   %s\n" "" "- $1" "" "${@:2}"
 }
 
-# $1 = label
+
 volumes_labeled() {
-    xsltproc --novalid --stringparam label "$1" - <(ioreg -ra -c "AppleAPFSVolume") <<'EOF'
+    local label="$1"
+    xsltproc --novalid --stringparam label "$label" - <(ioreg -ra -c "AppleAPFSVolume") <<'EOF'
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
   <xsl:output method="text"/>
   <xsl:template match="/">
@@ -109,32 +110,34 @@ EOF
     # <xsl:text>=</xsl:text>
 }
 
-# $1 = volume special (i.e., disk1s7)
 right_disk() {
-    [[ "$1" == "$NIX_VOLUME_USE_DISK"s* ]]
+    local volume_special="$1" # (i.e., disk1s7)
+    [[ "$volume_special" == "$NIX_VOLUME_USE_DISK"s* ]]
 }
-# $1 = volume special (i.e., disk1s7)
+
 right_volume() {
+    local volume_special="$1" # (i.e., disk1s7)
     # if set, it must match; otherwise ensure it's on the right disk
     if [ -z "$NIX_VOLUME_USE_SPECIAL" ]; then
-        if right_disk "$1"; then
-            NIX_VOLUME_USE_SPECIAL="$1" # latch on
+        if right_disk "$volume_special"; then
+            NIX_VOLUME_USE_SPECIAL="$volume_special" # latch on
             return 0
         else
             return 1
         fi
     else
-        [ "$1" = "$NIX_VOLUME_USE_SPECIAL" ]
+        [ "$volume_special" = "$NIX_VOLUME_USE_SPECIAL" ]
     fi
 }
-# $1 = volume uuid
+
 right_uuid() {
+    local volume_uuid="$1"
     # if set, it must match; otherwise allow
     if [ -z "$NIX_VOLUME_USE_UUID" ]; then
-        NIX_VOLUME_USE_UUID="$1" # latch on
+        NIX_VOLUME_USE_UUID="$volume_uuid" # latch on
         return 0
     else
-        [ "$1" = "$NIX_VOLUME_USE_UUID" ]
+        [ "$volume_uuid" = "$NIX_VOLUME_USE_UUID" ]
     fi
 }
 
@@ -193,13 +196,13 @@ EOF
     fi
 }
 
-# $1 = special
 volume_encrypted() {
+    local volume_special="$1" # (i.e., disk1s7)
     # Trying to match the first line of output; known first lines:
     # No cryptographic users for <special>
     # Cryptographic user for <special> (1 found)
     # Cryptographic users for <special> (2 found)
-    diskutil apfs listCryptoUsers -plist "$1" | /usr/bin/grep -q APFSCryptoUserUUID
+    diskutil apfs listCryptoUsers -plist "$volume_special" | /usr/bin/grep -q APFSCryptoUserUUID
 }
 
 test_fstab() {
@@ -227,27 +230,29 @@ test_nix_volume_mountd_installed() {
 }
 
 # current volume password
-# $1 = uuid
 test_keychain_by_uuid() {
+    local volume_uuid="$1"
     # Note: doesn't need sudo just to check; doesn't output pw
-    security find-generic-password -s "$1" &>/dev/null
+    security find-generic-password -s "$volume_uuid" &>/dev/null
 }
 
-# $1 = uuid
 get_volume_pass() {
+    local volume_uuid="$1"
     _sudo \
         "to confirm keychain has a password that unlocks this volume" \
-        security find-generic-password -s "$1" -w
+        security find-generic-password -s "$volume_uuid" -w
 }
 
-# $1 = special device, $2 = uuid
 verify_volume_pass() {
-    diskutil apfs unlockVolume "$1" -verify -stdinpassphrase -user "$2"
+    local volume_special="$1" # (i.e., disk1s7)
+    local volume_uuid="$2"
+    diskutil apfs unlockVolume "$volume_special" -verify -stdinpassphrase -user "$volume_uuid"
 }
 
-# $1 = special device, $2 = uuid
 volume_pass_works() {
-    get_volume_pass "$2" | verify_volume_pass "$1" "$2"
+    local volume_special="$1" # (i.e., disk1s7)
+    local volume_uuid="$2"
+    get_volume_pass "$volume_uuid" | verify_volume_pass "$volume_special" "$volume_uuid"
 }
 
 # Create the paths defined in synthetic.conf, saving us a reboot.
@@ -272,26 +277,27 @@ test_voldaemon() {
     test -f "$NIX_VOLUME_MOUNTD_DEST"
 }
 
-# $1 == encrypted|unencrypted, $2 == uuid
 generate_mount_command() {
-    local uuid mountpoint cmd=()
-    printf -v uuid "%q" "$2"
+    local cmd_type="$1" # encrypted|unencrypted
+    local volume_uuid mountpoint cmd=()
+    printf -v volume_uuid "%q" "$2"
     printf -v mountpoint "%q" "$NIX_ROOT"
 
-    case "${1-}" in
+    case "$cmd_type" in
         encrypted)
-            cmd=(/bin/sh -c "/usr/bin/security find-generic-password -s '$uuid' -w | /usr/sbin/diskutil apfs unlockVolume '$uuid' -mountpoint '$mountpoint' -stdinpassphrase");;
+            cmd=(/bin/sh -c "/usr/bin/security find-generic-password -s '$volume_uuid' -w | /usr/sbin/diskutil apfs unlockVolume '$volume_uuid' -mountpoint '$mountpoint' -stdinpassphrase");;
         unencrypted)
-            cmd=(/usr/sbin/diskutil mount -mountPoint "$mountpoint" "$uuid");;
+            cmd=(/usr/sbin/diskutil mount -mountPoint "$mountpoint" "$volume_uuid");;
         *)
-            failure "Invalid first arg $1 to generate_mount_command";;
+            failure "Invalid first arg $cmd_type to generate_mount_command";;
     esac
 
     printf "    <string>%s</string>\n" "${cmd[@]}"
 }
 
-# $1 == encrypted|unencrypted, $2 == uuid
 generate_mount_daemon() {
+    local cmd_type="$1" # encrypted|unencrypted
+    local volume_uuid="$2"
     cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -303,7 +309,7 @@ generate_mount_daemon() {
   <string>org.nixos.darwin-store</string>
   <key>ProgramArguments</key>
   <array>
-$(generate_mount_command "$1" "$2")
+$(generate_mount_command "$cmd_type" "$volume_uuid")
   </array>
 </dict>
 </plist>
@@ -315,25 +321,28 @@ _eat_bootout_err() {
 }
 
 # TODO: remove with --uninstall?
-# $1 == daemon label/name, $2 == plist path
 uninstall_launch_daemon_directions() {
-    substep "Uninstall LaunchDaemon $1" \
-      "  sudo launchctl bootout system/$1" \
-      "  sudo rm $2"
+    local daemon_label="$1" # i.e., org.nixos.blah-blah
+    local daemon_plist="$2" # abspath
+    substep "Uninstall LaunchDaemon $daemon_label" \
+      "  sudo launchctl bootout system/$daemon_label" \
+      "  sudo rm $daemon_plist"
 }
 
-# $1 == daemon label/name, $2 == plist path, $3 == reason added
 uninstall_launch_daemon_prompt() {
+    local daemon_label="$1" # i.e., org.nixos.blah-blah
+    local daemon_plist="$2" # abspath
+    local reason_for_daemon="$3"
     cat <<EOF
 
-The installer adds a LaunchDaemon to $3: $1
+The installer adds a LaunchDaemon to $reason_for_daemon: $daemon_label
 EOF
     if ui_confirm "Can I remove it?"; then
         _sudo "to terminate the daemon" \
-            launchctl bootout "system/$1" 2> >(_eat_bootout_err >&2) || true
+            launchctl bootout "system/$daemon_label" 2> >(_eat_bootout_err >&2) || true
             # this can "fail" with a message like:
             # Boot-out failed: 36: Operation now in progress
-        _sudo "to remove the daemon definition" rm "$2"
+        _sudo "to remove the daemon definition" rm "$daemon_plist"
     fi
 }
 
@@ -428,10 +437,12 @@ EOF
 
 add_nix_vol_fstab_line() {
     local uuid="$1"
+    # shellcheck disable=SC1003,SC2026
+    local escaped_mountpoint="${NIX_ROOT/ /'\\\'040}"
     shift
     EDITOR="/usr/bin/ex" _sudo "to add nix to fstab" "$@" <<EOF
 :a
-UUID=$uuid $NIX_ROOT apfs rw,noauto,nobrowse,suid,owners
+UUID=$uuid $escaped_mountpoint apfs rw,noauto,nobrowse,suid,owners
 .
 :x
 EOF
@@ -510,25 +521,26 @@ EOF
     fi
 }
 
-# $1 = special device
 remove_volume() {
+    local volume_special="$1" # (i.e., disk1s7)
     _sudo "to unmount the Nix volume" \
-        diskutil unmount force "$1" || true # might not be mounted
+        diskutil unmount force "$volume_special" || true # might not be mounted
     _sudo "to delete the Nix volume" \
-        diskutil apfs deleteVolume "$1"
+        diskutil apfs deleteVolume "$volume_special"
 }
 
 # aspiration: robust enough to both fix problems
 # *and* update older darwin volumes
-# $1 = special $2 = uuid
 cure_volume() {
+    local volume_special="$1" # (i.e., disk1s7)
+    local volume_uuid="$2"
     header "Found existing Nix volume"
-    row "  special" "$1"
-    row "     uuid" "$2"
+    row "  special" "$volume_special"
+    row "     uuid" "$volume_uuid"
 
-    if volume_encrypted "$1"; then
+    if volume_encrypted "$volume_special"; then
         row "encrypted" "yes"
-        if volume_pass_works "$1" "$2"; then
+        if volume_pass_works "$volume_special" "$volume_uuid"; then
             NIX_VOLUME_DO_ENCRYPT=0
             ok "Found a working decryption password in keychain :)"
             echo ""
@@ -549,10 +561,10 @@ The quick fix is to let me delete this volume and make you a new one.
 If that's okay, enter your (sudo) password to continue. If not, you
 can ensure the decryption password is in your system keychain with a
 "Where" (service) field set to this volume's UUID:
-  $2
+  $volume_uuid
 EOF
             if password_confirm "delete this volume"; then
-                remove_volume "$1"
+                remove_volume "$volume_special"
             else
                 # TODO: this is a good design case for a warn-and
                 # remind idiom...
@@ -561,7 +573,7 @@ Your Nix volume is encrypted, but I couldn't find its password. Either:
 - Delete or rename the volume out of the way
 - Ensure its decryption password is in the system keychain with a
   "Where" (service) field set to this volume's UUID:
-    $2
+    $volume_uuid
 EOF
             fi
         fi
@@ -574,7 +586,7 @@ EOF
         # encrypt the volume. If not, /shrug
         if ! headless && (( NIX_VOLUME_DO_ENCRYPT == 1 )); then
             if ui_confirm "Should I encrypt it and add the decryption key to your keychain?"; then
-                encrypt_volume "$2" "$NIX_VOLUME_LABEL"
+                encrypt_volume "$volume_uuid" "$NIX_VOLUME_LABEL"
             else
                 NIX_VOLUME_DO_ENCRYPT=0
                 reminder "FileVault is on, but your $NIX_VOLUME_LABEL volume isn't encrypted."
@@ -634,8 +646,8 @@ EOF
     fi
 }
 
-# $1 = uuid
 setup_fstab() {
+    local volume_uuid="$1"
     # fstab used to be responsible for mounting the volume. Now the last
     # step adds a LaunchDaemon responsible for mounting. This is technically
     # redundant for mounting, but diskutil appears to pick up mount options
@@ -643,28 +655,29 @@ setup_fstab() {
     # consistent across versions/subcommands).
     if ! test_fstab; then
         task "Configuring /etc/fstab to specify volume mount options" >&2
-        add_nix_vol_fstab_line "$1" vifs
+        add_nix_vol_fstab_line "$volume_uuid" vifs
     fi
 }
 
-# $1 = uuid, $2 = label
 encrypt_volume() {
+    local volume_uuid="$1"
+    local volume_label="$2"
     local password
     # Note: mount/unmount are late additions to support the right order
     # of operations for creating the volume and then baking its uuid into
     # other artifacts; not as well-trod wrt to potential errors, race
     # conditions, etc.
-    diskutil mount "$2"
+    diskutil mount "$volume_label"
 
     password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
     _sudo "to add your Nix volume's password to Keychain" \
         /usr/bin/security -i <<EOF
-add-generic-password -a "$2" -s "$1" -l "$2 encryption password" -D "Encrypted volume password" -j "Added automatically by the Nix installer for use by $NIX_VOLUME_MOUNTD_DEST" -w "$password" -T /System/Library/CoreServices/APFSUserAgent -T /System/Library/CoreServices/CSUserAgent -T /usr/bin/security "/Library/Keychains/System.keychain"
+add-generic-password -a "$volume_label" -s "$volume_uuid" -l "$volume_label encryption password" -D "Encrypted volume password" -j "Added automatically by the Nix installer for use by $NIX_VOLUME_MOUNTD_DEST" -w "$password" -T /System/Library/CoreServices/APFSUserAgent -T /System/Library/CoreServices/CSUserAgent -T /usr/bin/security "/Library/Keychains/System.keychain"
 EOF
     builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
-        diskutil apfs encryptVolume "$2" -user disk -stdinpassphrase
+        diskutil apfs encryptVolume "$volume_label" -user disk -stdinpassphrase
 
-    diskutil unmount force "$2"
+    diskutil unmount force "$volume_label"
 }
 
 create_volume() {
@@ -697,10 +710,10 @@ create_volume() {
     diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
 }
 
-# $1 = volume special
 volume_uuid_from_special() {
+    local volume_special="$1" # (i.e., disk1s7)
     # For reasons I won't pretend to fathom, this returns 253 when it works
-    /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$1" || true
+    /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -k "$volume_special" || true
 }
 
 # this sometimes clears immediately, and AFAIK clears
@@ -760,13 +773,14 @@ EOF
 
 }
 
-# $1 == encrypted|unencrypted, $2 == uuid
 setup_volume_daemon() {
+    local cmd_type="$1" # encrypted|unencrypted
+    local volume_uuid="$2"
     if ! test_voldaemon; then
         task "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'" >&2
         _sudo "to install the Nix volume mounter" /usr/bin/ex "$NIX_VOLUME_MOUNTD_DEST" <<EOF
 :a
-$(generate_mount_daemon "$1" "$2")
+$(generate_mount_daemon "$cmd_type" "$volume_uuid")
 .
 :x
 EOF
