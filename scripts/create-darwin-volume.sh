@@ -91,7 +91,7 @@ substep() {
 
 volumes_labeled() {
     local label="$1"
-    xsltproc --novalid --stringparam label "$label" - <(ioreg -ra -c "AppleAPFSVolume") <<'EOF'
+    xsltproc --novalid --stringparam label "$label" - <(/usr/sbin/ioreg -ra -c "AppleAPFSVolume") <<'EOF'
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
   <xsl:output method="text"/>
   <xsl:template match="/">
@@ -462,12 +462,12 @@ EOF
     # I think I think the most-proper way to test for it is:
     # diskutil info -plist "$NIX_VOLUME_LABEL" | xmllint --xpath "(/plist/dict/key[text()='GlobalPermissionsEnabled'])/following-sibling::*[1][name()='true']" -; echo $?
     #
-    # There's also `sudo vsdbutil -c /path` (which is much faster, but is also
+    # There's also `sudo /usr/sbin/vsdbutil -c /path` (which is much faster, but is also
     # deprecated and needs minor parsing).
     #
     # If no one finds a problem with doing so, I think the simplest approach
     # is to just eagerly set this. I found a few imperative approaches:
-    # (diskutil enableOwnership, ~100ms), a cheap one (vsdbutil -a, ~40-50ms),
+    # (diskutil enableOwnership, ~100ms), a cheap one (/usr/sbin/vsdbutil -a, ~40-50ms),
     # a very cheap one (append the internal format to /var/db/volinfo.database).
     #
     # But vsdbutil's deprecation notice suggests using fstab, so I want to
@@ -490,7 +490,7 @@ delete_nix_vol_fstab_line() {
 fstab_uninstall_directions() {
     substep "Remove ${NIX_ROOT} from /etc/fstab" \
       "  If nix is the only entry: sudo rm /etc/fstab" \
-      "  Otherwise, run 'sudo vifs' to remove the nix line"
+      "  Otherwise, run 'sudo /usr/sbin/vifs' to remove the nix line"
 }
 
 fstab_uninstall_prompt() {
@@ -514,7 +514,7 @@ EOF
     else
         echo "I might be able to help you make this edit. Here's the diff:"
         if ! _diff "/etc/fstab" "$SCRATCH/fstab.edit" && ui_confirm "Does the change above look right?"; then
-            delete_nix_vol_fstab_line vifs
+            delete_nix_vol_fstab_line /usr/sbin/vifs
         else
             echo "Remove nix from /etc/fstab (or remove the file)"
         fi
@@ -655,7 +655,7 @@ setup_fstab() {
     # consistent across versions/subcommands).
     if ! test_fstab; then
         task "Configuring /etc/fstab to specify volume mount options" >&2
-        add_nix_vol_fstab_line "$volume_uuid" vifs
+        add_nix_vol_fstab_line "$volume_uuid" /usr/sbin/vifs
     fi
 }
 
@@ -816,7 +816,7 @@ else
             echo "    | configure it to mount at $NIX_ROOT.  Follow these steps to uninstall. |"
             echo "     ------------------------------------------------------------------ "
             echo ""
-            echo "  1. Remove the entry from fstab using 'sudo vifs'"
+            echo "  1. Remove the entry from fstab using 'sudo /usr/sbin/vifs'"
             echo "  2. Run 'sudo launchctl bootout system/org.nixos.darwin-store'"
             echo "  3. Remove $NIX_VOLUME_MOUNTD_DEST"
             echo "  4. Destroy the data volume using '/usr/sbin/diskutil apfs deleteVolume'"
