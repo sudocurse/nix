@@ -540,6 +540,8 @@ create_directories() {
     task "Setting up the basic directory structure"
     if [ -d "$NIX_ROOT" ]; then
         # if /nix already exists, take ownership
+        #
+        # Caution: notes below are macOS-y
         # This is a bit of a goldilocks zone for taking ownership
         # if there are already files on the volume; the volume is
         # now mounted, but we haven't added a bunch of new files
@@ -548,8 +550,24 @@ create_directories() {
         # when promptly installed over a fresh single-user install.
         # In case anyone's aware of a shortcut.
         # `|| true`: .Trashes errors w/o full disk perm
+
+        # rumor per #4488 that macOS 11.2 may not have
+        # sbin on path, and that's where chown is, but
+        # since this bit is cross-platform:
+        # - first try with `command -vp` to try and find
+        #   chown in the usual places
+        # - fall back on `command -v` which would find
+        #   any chown on path
+        # if we don't find one, the command is already
+        # hiding behind || true, and the general state
+        # should be one the user can repair once they
+        # figure out where chown is...
+        local get_chr_own="$(command -vp chown)"
+        if [[ -z "$get_chr_own" ]]; then
+            get_chr_own="$(command -v chown)"
+        fi
         _sudo "to take root ownership of existing Nix store files" \
-              chown -R "root:$NIX_BUILD_GROUP_NAME" "$NIX_ROOT" || true
+              "$get_chr_own" -R "root:$NIX_BUILD_GROUP_NAME" "$NIX_ROOT" || true
     fi
     _sudo "to make the basic directory structure of Nix (part 1)" \
           install -dv -m 0755 /nix /nix/var /nix/var/log /nix/var/log/nix /nix/var/log/nix/drvs /nix/var/nix{,/db,/gcroots,/profiles,/temproots,/userpool} /nix/var/nix/{gcroots,profiles}/per-user
