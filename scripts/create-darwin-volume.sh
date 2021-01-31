@@ -202,7 +202,7 @@ volume_encrypted() {
     # No cryptographic users for <special>
     # Cryptographic user for <special> (1 found)
     # Cryptographic users for <special> (2 found)
-    diskutil apfs listCryptoUsers -plist "$volume_special" | /usr/bin/grep -q APFSCryptoUserUUID
+    /usr/sbin/diskutil apfs listCryptoUsers -plist "$volume_special" | /usr/bin/grep -q APFSCryptoUserUUID
 }
 
 test_fstab() {
@@ -246,7 +246,7 @@ get_volume_pass() {
 verify_volume_pass() {
     local volume_special="$1" # (i.e., disk1s7)
     local volume_uuid="$2"
-    diskutil apfs unlockVolume "$volume_special" -verify -stdinpassphrase -user "$volume_uuid"
+    /usr/sbin/diskutil apfs unlockVolume "$volume_special" -verify -stdinpassphrase -user "$volume_uuid"
 }
 
 volume_pass_works() {
@@ -524,9 +524,9 @@ EOF
 remove_volume() {
     local volume_special="$1" # (i.e., disk1s7)
     _sudo "to unmount the Nix volume" \
-        diskutil unmount force "$volume_special" || true # might not be mounted
+        /usr/sbin/diskutil unmount force "$volume_special" || true # might not be mounted
     _sudo "to delete the Nix volume" \
-        diskutil apfs deleteVolume "$volume_special"
+        /usr/sbin/diskutil apfs deleteVolume "$volume_special"
 }
 
 # aspiration: robust enough to both fix problems
@@ -667,7 +667,7 @@ encrypt_volume() {
     # of operations for creating the volume and then baking its uuid into
     # other artifacts; not as well-trod wrt to potential errors, race
     # conditions, etc.
-    diskutil mount "$volume_label"
+    /usr/sbin/diskutil mount "$volume_label"
 
     password="$(/usr/bin/xxd -l 32 -p -c 256 /dev/random)"
     _sudo "to add your Nix volume's password to Keychain" \
@@ -675,9 +675,9 @@ encrypt_volume() {
 add-generic-password -a "$volume_label" -s "$volume_uuid" -l "$volume_label encryption password" -D "Encrypted volume password" -j "Added automatically by the Nix installer for use by $NIX_VOLUME_MOUNTD_DEST" -w "$password" -T /System/Library/CoreServices/APFSUserAgent -T /System/Library/CoreServices/CSUserAgent -T /usr/bin/security "/Library/Keychains/System.keychain"
 EOF
     builtin printf "%s" "$password" | _sudo "to encrypt your Nix volume" \
-        diskutil apfs encryptVolume "$volume_label" -user disk -stdinpassphrase
+        /usr/sbin/diskutil apfs encryptVolume "$volume_label" -user disk -stdinpassphrase
 
-    diskutil unmount force "$volume_label"
+    /usr/sbin/diskutil unmount force "$volume_label"
 }
 
 create_volume() {
@@ -707,7 +707,7 @@ create_volume() {
     # 6) getting special w/ awk may be fragile, but doing it to:
     #    - save time over running slow diskutil commands
     #    - skirt risk we grab wrong volume if multiple match
-    diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
+    /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
 }
 
 volume_uuid_from_special() {
@@ -722,7 +722,7 @@ volume_uuid_from_special() {
 # 250-300ms. I suspect it's usually ~250-750ms
 await_volume() {
     # caution: this could, in theory, get stuck
-    until diskutil info "$NIX_ROOT" &>/dev/null; do
+    until /usr/sbin/diskutil info "$NIX_ROOT" &>/dev/null; do
         :
     done
 }
@@ -819,7 +819,7 @@ else
             echo "  1. Remove the entry from fstab using 'sudo vifs'"
             echo "  2. Run 'sudo launchctl bootout system/org.nixos.darwin-store'"
             echo "  3. Remove $NIX_VOLUME_MOUNTD_DEST"
-            echo "  4. Destroy the data volume using 'diskutil apfs deleteVolume'"
+            echo "  4. Destroy the data volume using '/usr/sbin/diskutil apfs deleteVolume'"
             echo "  5. Remove the 'nix' line from /etc/synthetic.conf (or the file)"
             echo ""
         } >&2
