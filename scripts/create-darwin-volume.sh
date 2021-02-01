@@ -170,7 +170,7 @@ cure_volumes() {
         # shellcheck disable=SC1097
         IFS== read -r special uuid <<< "$volume"
         # take the first one that's on the right disk
-        if [ -z "$found" ]; then
+        if [ -z "${found:-}" ]; then
             if right_volume "$special" && right_uuid "$uuid"; then
                 cure_volume "$special" "$uuid"
                 found="${special} (${uuid})"
@@ -191,7 +191,7 @@ EOF
             # TODO: if ! headless, chance to delete?
         fi
     done
-    if [ -z "$found" ]; then
+    if [ -z "${found:-}" ]; then
         readonly NIX_VOLUME_USE_SPECIAL NIX_VOLUME_USE_UUID
     fi
 }
