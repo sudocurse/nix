@@ -641,7 +641,13 @@ EOF
         fi
         create_synthetic_objects
         if ! test_nix; then
-            failure "error: failed to bootstrap $NIX_ROOT" >&2
+            failure >&2 <<EOF
+error: failed to bootstrap $NIX_ROOT
+If you enabled FileVault after booting, this is likely a known issue
+with macOS that you'll have to reboot to fix. If you didn't enable FV,
+though, please open an issue describing how the system that you see
+this error on was set up.
+EOF
         fi
     fi
 }
