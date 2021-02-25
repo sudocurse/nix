@@ -9,7 +9,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      CACHIX_NAME: nix-ci
+      CACHIX_NAME: abathur
     steps:
     - uses: actions/checkout@v2.3.4
       with:
@@ -18,7 +18,7 @@ jobs:
     - uses: cachix/cachix-action@v8
       with:
         name: '${{ env.CACHIX_NAME }}'
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     #- run: nix flake check
     - run: nix-build -A checks.$(if [[ `uname` = Linux ]]; then echo x86_64-linux; else echo x86_64-darwin; fi)
   installer:
@@ -26,7 +26,7 @@ jobs:
     needs: tests
     runs-on: ubuntu-latest
     env:
-      CACHIX_NAME: nix-ci
+      CACHIX_NAME: abathur
     outputs:
       installerURL: ${{ steps.prepare-installer.outputs.installerURL }}
     steps:
@@ -37,7 +37,7 @@ jobs:
     - uses: cachix/cachix-action@v8
       with:
         name: '${{ env.CACHIX_NAME }}'
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - id: prepare-installer
       run: scripts/prepare-installer-for-github-actions
   installer_test:
@@ -48,7 +48,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      CACHIX_NAME: nix-ci
+      CACHIX_NAME: abathur
     steps:
     - uses: actions/checkout@v2.3.4
     - uses: cachix/install-nix-action@master
