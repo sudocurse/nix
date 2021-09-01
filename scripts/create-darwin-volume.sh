@@ -715,7 +715,7 @@ create_volume() {
     # 6) getting special w/ awk may be fragile, but doing it to:
     #    - save time over running slow diskutil commands
     #    - skirt risk we grab wrong volume if multiple match
-    /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
+    sudo /usr/sbin/diskutil apfs addVolume "$NIX_VOLUME_USE_DISK" "$NIX_VOLUME_FS" "$NIX_VOLUME_LABEL" -nomount | /usr/bin/awk '/Created new APFS Volume/ {print $5}'
 }
 
 volume_uuid_from_special() {
