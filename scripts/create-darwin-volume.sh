@@ -435,12 +435,21 @@ EOF
     return 1
 }
 
-add_nix_vol_fstab_line() {
+# intentional subshell function to make exporting these envs w/o leaking easier
+add_nix_vol_fstab_line() (
     local uuid="$1"
     # shellcheck disable=SC1003,SC2026
     local escaped_mountpoint="${NIX_ROOT/ /'\\\'040}"
     shift
-    EDITOR="/usr/bin/ex" _sudo "to add nix to fstab" "$@" <<EOF
+    # exporting vim variables to work around a problem with vim plugins
+    # breaking the exit codes; see https://github.com/NixOS/nix/issues/5468
+    # we'd prefer --noplugin flag as elsewhere, but vifs doesn't word-split
+    # the EDITOR env.
+    # VIM == keep it from loading system plugins
+    # HOME == keep it from loading user plugins
+    # EDITOR == just telling vifs which editor to use
+    export VIM=/dev/null HOME= EDITOR="/usr/bin/ex"
+    _sudo "to add nix to fstab" "$@" <<EOF
 :a
 UUID=$uuid $escaped_mountpoint apfs rw,noauto,nobrowse,suid,owners
 .
@@ -475,7 +484,7 @@ EOF
     #
     # TODO: when this is workable, poke infinisil about reproducing the issue
     # and confirming this fix?
-}
+)
 
 delete_nix_vol_fstab_line() {
     # TODO: I'm scaffolding this to handle the new nix volumes
@@ -631,7 +640,7 @@ EOF
         # technically /etc/synthetic.d/nix is supported in Big Sur+
         # but handling both takes even more code...
         _sudo "to add Nix to /etc/synthetic.conf" \
-            /usr/bin/ex /etc/synthetic.conf <<EOF
+            /usr/bin/ex --noplugin /etc/synthetic.conf <<EOF
 :a
 ${NIX_ROOT:1}
 .
@@ -791,7 +800,7 @@ setup_volume_daemon() {
     local volume_uuid="$2"
     if ! test_voldaemon; then
         task "Configuring LaunchDaemon to mount '$NIX_VOLUME_LABEL'" >&2
-        _sudo "to install the Nix volume mounter" /usr/bin/ex "$NIX_VOLUME_MOUNTD_DEST" <<EOF
+        _sudo "to install the Nix volume mounter" /usr/bin/ex --noplugin "$NIX_VOLUME_MOUNTD_DEST" <<EOF
 :a
 $(generate_mount_daemon "$cmd_type" "$volume_uuid")
 .
